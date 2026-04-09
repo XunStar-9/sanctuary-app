@@ -229,11 +229,11 @@ export const AppSidebar = memo(function AppSidebar({
                   <p className={cn("text-[13px] font-medium truncate", currentSongIndex === idx ? "text-foreground" : "text-foreground/70 group-hover:text-foreground")}>{song.title}</p>
                   <p className="text-[11px] font-sans text-muted-foreground truncate">{song.artist}</p>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <span className="text-[11px] font-sans text-muted-foreground">{song.duration}</span>
                   <button onClick={e => onRemoveSong(e, song.id)}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-all ml-0.5">
-                    <Trash2 className="w-3 h-3" />
+                    className="p-1 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-muted/50 transition-all">
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
               </div>

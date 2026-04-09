@@ -144,9 +144,8 @@ export const LibraryView = memo(function LibraryView({
                         {book.chapters.length} 章 · {formatDate(book.addedAt)}
                       </p>
                     </button>
-                    {/* Delete button */}
                     <button onClick={e => { e.stopPropagation(); onRemoveBook(book.id); }}
-                      className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 w-6 h-6 rounded-md bg-background/80 flex items-center justify-center text-muted-foreground hover:text-destructive transition-all">
+                      className="absolute top-2 left-2 w-7 h-7 rounded-lg bg-background/80 backdrop-blur-sm border border-border/30 flex items-center justify-center text-muted-foreground/60 hover:text-destructive hover:bg-background/95 transition-all shadow-sm">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
