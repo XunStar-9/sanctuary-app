@@ -21,6 +21,9 @@ function parseFileMeta(file: File, index: number): Omit<Song, 'durationSecs' | '
   };
 }
 
+const MAX_RETRY = 3;
+const RETRY_DELAY = 1000;
+
 export function useAudio() {
   const [playlist,          setPlaylist]          = useState<Song[]>(DEFAULT_PLAYLIST);
   const [currentSongIndex,  setCurrentSongIndex]  = useState(0);
@@ -45,17 +48,40 @@ export function useAudio() {
   const isDraggingRef = useRef(isDragging);
   const currentSongIndexRef = useRef(currentSongIndex);
   const durationRef = useRef(duration);
+  const isPlayingRef = useRef(isPlaying);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
   isShuffleRef.current  = isShuffle;
   isRepeatRef.current   = isRepeat;
   playlistRef.current   = playlist;
   isDraggingRef.current = isDragging;
   currentSongIndexRef.current = currentSongIndex;
   durationRef.current   = duration;
+  isPlayingRef.current  = isPlaying;
 
   const rafId = useRef(0);
 
+  const safePlay = useCallback((audio: HTMLAudioElement) => {
+    const p = audio.play();
+    if (p) {
+      p.catch((err) => {
+        if (err.name === 'AbortError') return;
+        if (err.name === 'NotAllowedError') return;
+        if (retryCountRef.current < MAX_RETRY && isPlayingRef.current) {
+          retryCountRef.current += 1;
+          clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = setTimeout(() => {
+            if (!audioRef.current || !isPlayingRef.current) return;
+            safePlay(audioRef.current);
+          }, RETRY_DELAY * retryCountRef.current);
+        }
+      });
+    }
+  }, []);
+
   useEffect(() => {
     const audio = new Audio();
+    audio.preload = 'auto';
     audioRef.current = audio;
 
     let lastReportedTime = 0;
@@ -70,15 +96,49 @@ export function useAudio() {
       });
     };
     const onDurationChange = () => { if (isFinite(audio.duration)) setDuration(audio.duration); };
-    const onPlay  = () => setIsPlaying(true);
+    const onPlay  = () => { retryCountRef.current = 0; setIsPlaying(true); };
     const onPause = () => setIsPlaying(false);
     const onEnded = () => {
       const len = playlistRef.current.length;
       if (!len) return;
-      if (isRepeatRef.current) { audio.currentTime = 0; audio.play(); return; }
+      if (isRepeatRef.current) { audio.currentTime = 0; safePlay(audio); return; }
       setCurrentSongIndex(prev =>
         isShuffleRef.current ? shuffleNext(prev, len) : (prev + 1) % len
       );
+    };
+
+    const onError = () => {
+      if (!isPlayingRef.current) return;
+      if (retryCountRef.current < MAX_RETRY) {
+        retryCountRef.current += 1;
+        const savedTime = audio.currentTime;
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = setTimeout(() => {
+          if (!audioRef.current || !isPlayingRef.current) return;
+          const src = audioRef.current.src;
+          if (!src) return;
+          audioRef.current.src = src;
+          audioRef.current.currentTime = savedTime;
+          safePlay(audioRef.current);
+        }, RETRY_DELAY * retryCountRef.current);
+      }
+    };
+
+    const onStalled = () => {
+      if (!isPlayingRef.current) return;
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(() => {
+        if (!audioRef.current || !isPlayingRef.current) return;
+        if (audioRef.current.paused) safePlay(audioRef.current);
+      }, 2000);
+    };
+
+    const onWaiting = () => {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(() => {
+        if (!audioRef.current || !isPlayingRef.current) return;
+        if (audioRef.current.paused) safePlay(audioRef.current);
+      }, 3000);
     };
 
     audio.addEventListener('timeupdate',     onTimeUpdate);
@@ -86,14 +146,21 @@ export function useAudio() {
     audio.addEventListener('play',           onPlay);
     audio.addEventListener('pause',          onPause);
     audio.addEventListener('ended',          onEnded);
+    audio.addEventListener('error',          onError);
+    audio.addEventListener('stalled',        onStalled);
+    audio.addEventListener('waiting',        onWaiting);
 
     return () => {
       cancelAnimationFrame(rafId.current);
+      clearTimeout(retryTimerRef.current);
       audio.removeEventListener('timeupdate',     onTimeUpdate);
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('play',           onPlay);
       audio.removeEventListener('pause',          onPause);
       audio.removeEventListener('ended',          onEnded);
+      audio.removeEventListener('error',          onError);
+      audio.removeEventListener('stalled',        onStalled);
+      audio.removeEventListener('waiting',        onWaiting);
       audio.pause();
       audioRef.current = null;
     };
@@ -102,12 +169,15 @@ export function useAudio() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    retryCountRef.current = 0;
+    clearTimeout(retryTimerRef.current);
     const song = playlist[currentSongIndex];
     if (song?.src) {
       audio.src = song.src;
+      audio.load();
       setCurrentTime(0);
       setDuration(0);
-      if (isPlaying) audio.play().catch(() => {});
+      if (isPlaying) safePlay(audio);
     } else {
       audio.removeAttribute('src');
       setCurrentTime(0);
@@ -118,7 +188,7 @@ export function useAudio() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !playlist[currentSongIndex]?.src) return;
-    if (isPlaying) audio.play().catch(() => {});
+    if (isPlaying) safePlay(audio);
     else           audio.pause();
   }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -130,9 +200,9 @@ export function useAudio() {
   const handlePlayPause = useCallback(() => {
     if (!audioRef.current || !playlistRef.current.length) return;
     if (!playlistRef.current[currentSongIndexRef.current]?.src) { setIsPlaying(p => !p); return; }
-    if (audioRef.current.paused) audioRef.current.play().catch(() => {});
+    if (audioRef.current.paused) safePlay(audioRef.current);
     else                         audioRef.current.pause();
-  }, []);
+  }, [safePlay]);
 
   const handleNext = useCallback(() => {
     if (!playlist.length) return;
