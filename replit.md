@@ -32,21 +32,28 @@ Personal notes & music PWA built with React + Vite + Tailwind CSS.
 
 **Features**: Notes CRUD (localStorage), HTML5 audio player with file upload, 5 switchable themes, settings panel, immersive novel reader (TXT/EPUB), typography customization, text formatting toolbar on selection.
 
+**Data persistence**:
+- Notes: localStorage (debounced 300ms), active note ID persisted, auto-corrects stale IDs
+- Music: audio files in IndexedDB (cached connection), playlist metadata in localStorage (debounced 500ms)
+- Settings: all 7 keys in localStorage (debounced 100ms)
+- Books: localStorage (debounced 500ms), bookmarks/progress saved immediately
+
 **UI features wired**:
-- Uploaded music persisted to IndexedDB (survives page refresh); playlist metadata in localStorage
 - Volume control slider with mute/unmute toggle (restores previous volume)
 - Note delete with double-click confirm (trash icon visible on mobile, hover-reveal on desktop)
+- Note date auto-updates on edit
 - Search clear button (X) in sidebar search field
 - `active:scale-90`/`active:scale-95` touch feedback on all interactive buttons
 - Music player: shuffle, repeat, seek, upload, playlist panel
 
-**Performance optimizations applied**:
-- `useAudio`: `timeupdate` throttled via rAF + 250ms delta gate; `currentSong` memoized with `useMemo`
-- `useNotes`: localStorage save debounced 300ms
+**Performance & code quality**:
+- `useAudio`: `timeupdate` throttled via rAF + 250ms delta gate; `currentSong` memoized; `clearTimer` helper for null-safe timeout clearing
+- `useNotes`: stale closure fixed via `activeNoteIdRef`; stale ID auto-correction effect
 - `useBooks`: localStorage save debounced 500ms
 - `useSettings`: 7 separate useEffects consolidated into 1 debounced effect (100ms)
 - `home.tsx`: SettingsPanel, TypographyPanel, LibraryView lazy-loaded with `React.lazy` + `Suspense`
 - All child components wrapped with `React.memo`; callbacks stabilized with `useCallback`
+- Zero TypeScript errors (`tsc --noEmit` passes clean)
 
 **Capacitor APK**: Configured for local Android builds. See `BUILD_APK.md` for instructions.
 - `pnpm run build:apk` — build web assets + sync to Android

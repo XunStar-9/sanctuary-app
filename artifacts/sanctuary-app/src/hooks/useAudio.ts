@@ -36,6 +36,10 @@ function buildInitialPlaylist(): Song[] {
   return DEFAULT_PLAYLIST;
 }
 
+function clearTimer(ref: React.RefObject<ReturnType<typeof setTimeout> | null>) {
+  if (ref.current !== null) { clearTimeout(ref.current); ref.current = null; }
+}
+
 const MAX_RETRY = 3;
 const RETRY_DELAY = 1000;
 
@@ -120,7 +124,7 @@ export function useAudio() {
         if (err.name === 'NotAllowedError') return;
         if (retryCountRef.current < MAX_RETRY && isPlayingRef.current) {
           retryCountRef.current += 1;
-          clearTimeout(retryTimerRef.current);
+          clearTimer(retryTimerRef);
           retryTimerRef.current = setTimeout(() => {
             if (!audioRef.current || !isPlayingRef.current) return;
             safePlay(audioRef.current);
@@ -164,7 +168,7 @@ export function useAudio() {
       if (retryCountRef.current < MAX_RETRY) {
         retryCountRef.current += 1;
         const savedTime = audio.currentTime;
-        clearTimeout(retryTimerRef.current);
+        clearTimer(retryTimerRef);
         retryTimerRef.current = setTimeout(() => {
           if (!audioRef.current || !isPlayingRef.current) return;
           const src = audioRef.current.src;
@@ -178,7 +182,7 @@ export function useAudio() {
 
     const onStalled = () => {
       if (!isPlayingRef.current) return;
-      clearTimeout(retryTimerRef.current);
+      clearTimer(retryTimerRef);
       retryTimerRef.current = setTimeout(() => {
         if (!audioRef.current || !isPlayingRef.current) return;
         if (audioRef.current.paused) safePlay(audioRef.current);
@@ -186,7 +190,7 @@ export function useAudio() {
     };
 
     const onWaiting = () => {
-      clearTimeout(retryTimerRef.current);
+      clearTimer(retryTimerRef);
       retryTimerRef.current = setTimeout(() => {
         if (!audioRef.current || !isPlayingRef.current) return;
         if (audioRef.current.paused) safePlay(audioRef.current);
@@ -204,7 +208,7 @@ export function useAudio() {
 
     return () => {
       cancelAnimationFrame(rafId.current);
-      clearTimeout(retryTimerRef.current);
+      clearTimer(retryTimerRef);
       audio.removeEventListener('timeupdate',     onTimeUpdate);
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('play',           onPlay);
@@ -222,7 +226,7 @@ export function useAudio() {
     const audio = audioRef.current;
     if (!audio) return;
     retryCountRef.current = 0;
-    clearTimeout(retryTimerRef.current);
+    clearTimer(retryTimerRef);
     const song = playlist[currentSongIndex];
     if (song?.src) {
       audio.src = song.src;

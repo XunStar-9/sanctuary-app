@@ -28,7 +28,7 @@ function SliderRow({ label, effectiveValue, isCustom, min, max, step, display, o
           <span className="text-[13px] font-sans text-foreground tabular-nums">{display}</span>
           {isCustom && (
             <button onClick={onReset}
-              className="text-[10px] font-sans text-muted-foreground/60 hover:text-muted-foreground transition-colors px-1.5 py-0.5 rounded bg-muted/40">
+              className="text-[10px] font-sans text-muted-foreground/60 hover:text-muted-foreground transition-all duration-150 active:scale-95 px-1.5 py-0.5 rounded bg-muted/40">
               重置
             </button>
           )}
@@ -139,7 +139,7 @@ export const TypographyPanel = memo(function TypographyPanel({
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-border/60 shrink-0">
           <button onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0">
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-150 active:scale-90 shrink-0">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-medium text-foreground tracking-wide">字形设置</span>
@@ -177,7 +177,7 @@ export const TypographyPanel = memo(function TypographyPanel({
               {(['serif', 'sans'] as EditorFont[]).map(f => (
                 <button key={f} onClick={() => onEditorFont(f)}
                   className={cn(
-                    "flex-1 py-3 rounded-xl text-sm border transition-all duration-150",
+                    "flex-1 py-3 rounded-xl text-sm border transition-all duration-150 active:scale-95",
                     editorFont === f
                       ? "bg-primary text-primary-foreground border-transparent shadow-sm"
                       : "bg-muted/50 text-foreground/70 border-transparent hover:bg-muted"

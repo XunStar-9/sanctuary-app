@@ -74,12 +74,12 @@ export const SettingsPanel = memo(function SettingsPanel({ open, onClose, onOpen
             <button
               onClick={onOpenTypography}
               title="字形设置"
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-150 active:scale-90"
             >
               <Type className="w-4 h-4" />
             </button>
             <button onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+              className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-150 active:scale-90">
               <X className="w-4 h-4" />
             </button>
           </div>
