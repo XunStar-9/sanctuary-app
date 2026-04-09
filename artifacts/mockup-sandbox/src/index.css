@@ -42,96 +42,82 @@
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 }
 
-/* LIGHT MODE - Default theme with placeholder values */
+/* LIGHT MODE - Warm, intimate sanctuary */
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
-  --opaque-button-border-intensity: -8;
+  --background: 40 40% 98%;      /* #FDFBF7 */
+  --foreground: 25 15% 25%;      /* Deep warm gray/brown */
+  --card: 40 30% 99%;
+  --card-foreground: 25 15% 25%;
+  --popover: 40 30% 99%;
+  --popover-foreground: 25 15% 25%;
+  --primary: 15 35% 60%;         /* Dusty rose */
+  --primary-foreground: 40 40% 98%;
+  --secondary: 35 25% 90%;       /* Soft warm beige */
+  --secondary-foreground: 25 15% 25%;
+  --muted: 35 25% 90%;
+  --muted-foreground: 25 10% 50%;
+  --accent: 15 35% 60%;
+  --accent-foreground: 40 40% 98%;
+  --destructive: 0 50% 50%;
+  --destructive-foreground: 40 40% 98%;
+  --border: 35 20% 85%;
+  --input: 35 20% 85%;
+  --ring: 15 35% 60%;
+  --chart-1: 15 35% 60%;
+  --chart-2: 30 30% 50%;
+  --chart-3: 45 40% 60%;
+  --chart-4: 60 30% 70%;
+  --chart-5: 0 30% 60%;
+  --sidebar: 35 25% 94%;
+  --sidebar-foreground: 25 15% 25%;
+  --sidebar-primary: 15 35% 60%;
+  --sidebar-primary-foreground: 40 40% 98%;
+  --sidebar-accent: 35 30% 88%;
+  --sidebar-accent-foreground: 25 15% 25%;
+  --sidebar-border: 35 20% 85%;
+  --sidebar-ring: 15 35% 60%;
 
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
-
-  --background: 0 0% 99%;
-  --foreground: 0 0% 9%;
-  --card: 0 0% 100%;
-  --card-foreground: 0 0% 9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 0 0% 9%;
-  --primary: 220 14% 18%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 220 14% 96%;
-  --secondary-foreground: 0 0% 9%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 8% 46%;
-  --accent: 220 14% 96%;
-  --accent-foreground: 0 0% 9%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 220 14% 18%;
-  --chart-1: 220 14% 18%;
-  --chart-2: 220 8% 46%;
-  --chart-3: 220 14% 96%;
-  --chart-4: 43 74% 66%;
-  --chart-5: 27 87% 67%;
-  --sidebar: 0 0% 98%;
-  --sidebar-foreground: 240 5.3% 26.1%;
-  --sidebar-primary: 240 5.9% 10%;
-  --sidebar-primary-foreground: 0 0% 98%;
-  --sidebar-accent: 240 4.8% 95.9%;
-  --sidebar-accent-foreground: 240 5.9% 10%;
-  --sidebar-border: 220 13% 91%;
-  --sidebar-ring: 240 5.9% 10%;
-
-  --font-sans: 'Inter', sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
-  --radius: .5rem;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-mono: "Menlo", monospace;
+  --radius: 1rem;
   --spacing: 0.25rem;
 }
 
 /* DARK MODE */
 .dark {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
-  --opaque-button-border-intensity: 9;
-
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
-
-  --background: 0 0% 3%;
-  --foreground: 0 0% 98%;
-  --card: 0 0% 6%;
-  --card-foreground: 0 0% 98%;
-  --popover: 0 0% 6%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 0 0% 98%;
-  --primary-foreground: 0 0% 9%;
-  --secondary: 0 0% 12%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 0 0% 12%;
-  --muted-foreground: 0 0% 63%;
-  --accent: 0 0% 12%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 0 0% 15%;
-  --input: 0 0% 15%;
-  --ring: 0 0% 98%;
-  --chart-1: 0 0% 98%;
-  --chart-2: 0 0% 63%;
-  --chart-3: 0 0% 15%;
-  --chart-4: 280 65% 60%;
-  --chart-5: 340 75% 55%;
-  --sidebar: 240 5.9% 10%;
-  --sidebar-foreground: 240 4.8% 95.9%;
-  --sidebar-primary: 224.3 76.3% 48%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 3.7% 15.9%;
-  --sidebar-accent-foreground: 240 4.8% 95.9%;
-  --sidebar-border: 240 3.7% 15.9%;
-  --sidebar-ring: 240 4.9% 83.9%;
+  --background: 25 15% 12%;
+  --foreground: 40 30% 90%;
+  --card: 25 15% 15%;
+  --card-foreground: 40 30% 90%;
+  --popover: 25 15% 15%;
+  --popover-foreground: 40 30% 90%;
+  --primary: 15 35% 60%;
+  --primary-foreground: 40 40% 98%;
+  --secondary: 25 15% 20%;
+  --secondary-foreground: 40 30% 90%;
+  --muted: 25 15% 20%;
+  --muted-foreground: 40 20% 60%;
+  --accent: 15 35% 60%;
+  --accent-foreground: 40 40% 98%;
+  --destructive: 0 50% 50%;
+  --destructive-foreground: 40 40% 98%;
+  --border: 25 15% 25%;
+  --input: 25 15% 25%;
+  --ring: 15 35% 60%;
+  --chart-1: 15 35% 60%;
+  --chart-2: 30 30% 50%;
+  --chart-3: 45 40% 60%;
+  --chart-4: 60 30% 70%;
+  --chart-5: 0 30% 60%;
+  --sidebar: 25 15% 15%;
+  --sidebar-foreground: 40 30% 90%;
+  --sidebar-primary: 15 35% 60%;
+  --sidebar-primary-foreground: 40 40% 98%;
+  --sidebar-accent: 25 15% 20%;
+  --sidebar-accent-foreground: 40 30% 90%;
+  --sidebar-border: 25 15% 25%;
+  --sidebar-ring: 15 35% 60%;
 }
 
 @layer base {
@@ -139,17 +125,14 @@
     @apply border-border;
   }
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased bg-background text-foreground selection:bg-primary/20;
   }
 }
 
 @layer utilities {
-  /* Hide ugly search cancel button in Chrome */
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;
   }
-
-  /* Placeholder styling for contentEditable div */
   [contenteditable][data-placeholder]:empty::before {
     content: attr(data-placeholder);
     color: hsl(var(--muted-foreground));
