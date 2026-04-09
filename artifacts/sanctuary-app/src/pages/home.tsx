@@ -7,12 +7,14 @@ import { useBooks } from '@/hooks/useBooks';
 import { AppSidebar } from '@/components/AppSidebar';
 import { NoteEditor } from '@/components/NoteEditor';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { TypographyPanel } from '@/components/TypographyPanel';
 import { LibraryView } from '@/components/LibraryView';
 
 export default function Home() {
-  const [sidebarOpen,  setSidebarOpen]  = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [libraryOpen,  setLibraryOpen]  = useState(false);
+  const [sidebarOpen,    setSidebarOpen]    = useState(true);
+  const [settingsOpen,   setSettingsOpen]   = useState(false);
+  const [typographyOpen, setTypographyOpen] = useState(false);
+  const [libraryOpen,    setLibraryOpen]    = useState(false);
 
   const settings = useSettings();
   const notes    = useNotes();
@@ -24,14 +26,16 @@ export default function Home() {
     if (window.innerWidth < 768) setSidebarOpen(false);
   }, [notes]);
 
-  const openSettings  = useCallback(() => setSettingsOpen(true),  []);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
-  const closeSidebar  = useCallback(() => setSidebarOpen(false),  []);
-  const openSidebar   = useCallback(() => setSidebarOpen(true),   []);
-  const toggleSidebar = useCallback(() => setSidebarOpen(p => !p), []);
-  const openLibrary   = useCallback(() => { setLibraryOpen(true); setSidebarOpen(false); }, []);
-  const closeLibrary  = useCallback(() => setLibraryOpen(false), []);
-  const backToShelf   = useCallback(() => books.selectBook(''), [books]);
+  const openSettings     = useCallback(() => setSettingsOpen(true),  []);
+  const closeSettings    = useCallback(() => setSettingsOpen(false), []);
+  const openTypography   = useCallback(() => setTypographyOpen(true),  []);
+  const closeTypography  = useCallback(() => setTypographyOpen(false), []);
+  const closeSidebar     = useCallback(() => setSidebarOpen(false),  []);
+  const openSidebar      = useCallback(() => setSidebarOpen(true),   []);
+  const toggleSidebar    = useCallback(() => setSidebarOpen(p => !p), []);
+  const openLibrary      = useCallback(() => { setLibraryOpen(true); setSidebarOpen(false); }, []);
+  const closeLibrary     = useCallback(() => setLibraryOpen(false), []);
+  const backToShelf      = useCallback(() => books.selectBook(''), [books]);
 
   const handleSelectBook = useCallback((id: string) => {
     books.selectBook(id);
@@ -94,6 +98,9 @@ export default function Home() {
         fontSize={settings.fontSize}
         lineHeight={settings.lineHeight}
         editorFont={settings.editorFont}
+        fontSizeNum={settings.fontSizeNum}
+        lineHeightNum={settings.lineHeightNum}
+        formattingEnabled={settings.formattingEnabled}
         onToggleSidebar={toggleSidebar}
         onUpdateNote={notes.updateActiveNote}
         onOpenSidebar={openSidebar}
@@ -102,10 +109,26 @@ export default function Home() {
       <SettingsPanel
         open={settingsOpen}
         onClose={closeSettings}
+        onOpenTypography={openTypography}
         theme={settings.theme}           onTheme={settings.setTheme}
         fontSize={settings.fontSize}     onFontSize={settings.setFontSize}
         lineHeight={settings.lineHeight} onLineHeight={settings.setLineHeight}
         editorFont={settings.editorFont} onEditorFont={settings.setEditorFont}
+      />
+
+      <TypographyPanel
+        open={typographyOpen}
+        onClose={closeTypography}
+        editorFont={settings.editorFont}
+        onEditorFont={settings.setEditorFont}
+        fontSizeNum={settings.fontSizeNum}
+        onFontSizeNum={settings.setFontSizeNum}
+        lineHeightNum={settings.lineHeightNum}
+        onLineHeightNum={settings.setLineHeightNum}
+        fontSizePreset={settings.fontSize}
+        lineHeightPreset={settings.lineHeight}
+        formattingEnabled={settings.formattingEnabled}
+        onFormattingEnabled={settings.setFormattingEnabled}
       />
 
       {/* Library / Book Reader — full-screen overlay */}

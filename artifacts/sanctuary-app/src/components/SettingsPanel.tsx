@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { X, Type } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { THEMES } from '@/lib/types';
@@ -8,16 +8,20 @@ import type { ThemeId, FontSize, LineHeight, EditorFont } from '@/lib/types';
 type Props = {
   open: boolean;
   onClose: () => void;
+  onOpenTypography: () => void;
   theme: ThemeId;       onTheme: (v: ThemeId) => void;
   fontSize: FontSize;   onFontSize: (v: FontSize) => void;
   lineHeight: LineHeight; onLineHeight: (v: LineHeight) => void;
   editorFont: EditorFont; onEditorFont: (v: EditorFont) => void;
 };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mb-6">
-      <p className="text-[10px] font-sans font-medium tracking-[0.15em] uppercase text-muted-foreground mb-3">{title}</p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-sans font-medium tracking-[0.15em] uppercase text-muted-foreground">{title}</p>
+        {action}
+      </div>
       {children}
     </div>
   );
@@ -37,7 +41,7 @@ function OptionBtn({ label, active, onClick }: { label: string; active: boolean;
   );
 }
 
-export function SettingsPanel({ open, onClose, theme, onTheme, fontSize, onFontSize, lineHeight, onLineHeight, editorFont, onEditorFont }: Props) {
+export function SettingsPanel({ open, onClose, onOpenTypography, theme, onTheme, fontSize, onFontSize, lineHeight, onLineHeight, editorFont, onEditorFont }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,12 +66,23 @@ export function SettingsPanel({ open, onClose, theme, onTheme, fontSize, onFontS
           "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
           open ? "translate-x-0" : "translate-x-full"
         )}>
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-border/60 shrink-0">
           <span className="text-sm font-medium text-foreground tracking-wide">设置</span>
-          <button onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Typography button */}
+            <button
+              onClick={onOpenTypography}
+              title="字形设置"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            >
+              <Type className="w-4 h-4" />
+            </button>
+            <button onClick={onClose}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <ScrollArea className="flex-1">
@@ -92,7 +107,15 @@ export function SettingsPanel({ open, onClose, theme, onTheme, fontSize, onFontS
               </div>
             </Section>
 
-            <Section title="字号大小">
+            <Section
+              title="字号大小"
+              action={
+                <button onClick={onOpenTypography}
+                  className="text-[10px] font-sans text-primary/70 hover:text-primary transition-colors">
+                  精细调节 →
+                </button>
+              }
+            >
               <div className="flex gap-2">
                 <OptionBtn label="小" active={fontSize === 'sm'} onClick={() => onFontSize('sm')} />
                 <OptionBtn label="中" active={fontSize === 'md'} onClick={() => onFontSize('md')} />
@@ -100,7 +123,15 @@ export function SettingsPanel({ open, onClose, theme, onTheme, fontSize, onFontS
               </div>
             </Section>
 
-            <Section title="行间距">
+            <Section
+              title="行间距"
+              action={
+                <button onClick={onOpenTypography}
+                  className="text-[10px] font-sans text-primary/70 hover:text-primary transition-colors">
+                  精细调节 →
+                </button>
+              }
+            >
               <div className="flex gap-2">
                 <OptionBtn label="紧凑"  active={lineHeight === 'tight'}   onClick={() => onLineHeight('tight')} />
                 <OptionBtn label="舒适"  active={lineHeight === 'normal'}  onClick={() => onLineHeight('normal')} />
