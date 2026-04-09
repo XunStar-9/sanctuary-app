@@ -6,6 +6,7 @@ import type { FontSize, LineHeight, EditorFont } from '@/lib/types';
 
 const FONT_SIZE_MAP: Record<FontSize, string>    = { sm: 'text-[16px]', md: 'text-[18px]', lg: 'text-[21px]' };
 const LINE_HEIGHT_MAP: Record<LineHeight, string> = { tight: 'leading-[1.9]', normal: 'leading-[2.4]', relaxed: 'leading-[3.0]' };
+const BM_DATE_FMT = new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 type Props = {
   book: Book;
@@ -89,8 +90,9 @@ export const BookReader = memo(function BookReader({
   const [panelOpen,      setPanelOpen]      = useState(false);
   const [panelTab,       setPanelTab]       = useState<'chapters' | 'bookmarks'>('chapters');
 
-  const contentRef  = useRef<HTMLDivElement>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentRef    = useRef<HTMLDivElement>(null);
+  const hideTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const chapter       = book.chapters[chapterIdx];
   const totalChapters = book.chapters.length;
@@ -107,7 +109,10 @@ export const BookReader = memo(function BookReader({
 
   useEffect(() => {
     showToolbar();
-    return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current); };
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore scroll position on chapter change
@@ -124,7 +129,6 @@ export const BookReader = memo(function BookReader({
     }
   }, [chapterIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Track scroll → save progress
   const handleScroll = useCallback(() => {
     const el = contentRef.current;
     if (!el) return;
@@ -132,7 +136,10 @@ export const BookReader = memo(function BookReader({
       ? 0
       : (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100;
     setScrollPct(pct);
-    if (chapter) onSaveProgress(book.id, chapter.id, pct);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      if (chapter) onSaveProgress(book.id, chapter.id, pct);
+    }, 300);
   }, [book.id, chapter, onSaveProgress]);
 
   const handleContentClick = useCallback((e: React.MouseEvent) => {
@@ -367,7 +374,7 @@ export const BookReader = memo(function BookReader({
                 )}
                 {bookmarks.map(bm => {
                   const bmChapter = book.chapters.find(c => c.id === bm.chapterId);
-                  const date = new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(bm.createdAt));
+                  const date = BM_DATE_FMT.format(new Date(bm.createdAt));
                   return (
                     <div key={bm.id}
                       className="flex items-start gap-2 px-4 py-3 hover:bg-muted/30 transition-colors group border-b border-border/20 last:border-0">

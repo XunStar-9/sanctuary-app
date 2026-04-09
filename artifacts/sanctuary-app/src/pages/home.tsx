@@ -21,10 +21,13 @@ export default function Home() {
   const audio    = useAudio();
   const books    = useBooks();
 
+  const setActiveNoteId = notes.setActiveNoteId;
+  const selectBook      = books.selectBook;
+
   const handleSelectNote = useCallback((id: string) => {
-    notes.setActiveNoteId(id);
+    setActiveNoteId(id);
     if (window.innerWidth < 768) setSidebarOpen(false);
-  }, [notes]);
+  }, [setActiveNoteId]);
 
   const openSettings     = useCallback(() => setSettingsOpen(true),  []);
   const closeSettings    = useCallback(() => setSettingsOpen(false), []);
@@ -35,11 +38,11 @@ export default function Home() {
   const toggleSidebar    = useCallback(() => setSidebarOpen(p => !p), []);
   const openLibrary      = useCallback(() => { setLibraryOpen(true); setSidebarOpen(false); }, []);
   const closeLibrary     = useCallback(() => setLibraryOpen(false), []);
-  const backToShelf      = useCallback(() => books.selectBook(''), [books]);
+  const backToShelf      = useCallback(() => selectBook(''), [selectBook]);
 
   const handleSelectBook = useCallback((id: string) => {
-    books.selectBook(id);
-  }, [books]);
+    selectBook(id);
+  }, [selectBook]);
 
   return (
     <div className="h-[100dvh] bg-background text-foreground font-serif selection:bg-primary/20 flex overflow-hidden">

@@ -176,6 +176,8 @@ export function useAudio() {
     setPlaylist(prev => {
       const removeIdx = prev.findIndex(s => s.id === songId);
       if (removeIdx === -1) return prev;
+      const removed = prev[removeIdx];
+      if (removed.isUploaded && removed.src) URL.revokeObjectURL(removed.src);
       const next = prev.filter(s => s.id !== songId);
       if (!next.length) {
         setCurrentSongIndex(0);
