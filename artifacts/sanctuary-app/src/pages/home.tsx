@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX,
-  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2, SlidersHorizontal, X
+  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2, SlidersHorizontal, X, Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -301,6 +301,7 @@ export default function Home() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(70);
   const [isMuted, setIsMuted] = useState(false);
+  const [activeSection, setActiveSection] = useState<'notes' | 'music'>('notes');
   const [mobileView, setMobileView] = useState<MobileView>('notes-list');
   const [mobileTab, setMobileTab] = useState<'notes' | 'player'>('notes');
   const [isDragging, setIsDragging] = useState(false);
@@ -501,15 +502,9 @@ export default function Home() {
           <Input className="pl-9 h-9 bg-muted/50 border-none rounded-full text-sm font-sans focus-visible:ring-1" placeholder="Search notes..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
         <span className="text-xs font-sans tracking-widest uppercase text-muted-foreground hidden md:block select-none">Notes</span>
-        <div className="flex items-center gap-1 shrink-0">
-          <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary" onClick={handleAddNote}>
-            <Plus className="w-4 h-4" />
-          </Button>
-          <button onClick={() => setSettingsOpen(true)}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
-        </div>
+        <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary shrink-0" onClick={handleAddNote}>
+          <Plus className="w-4 h-4" />
+        </Button>
       </div>
       <ScrollArea className="flex-1">
         <div className="p-3 md:p-4 flex flex-col gap-2">
@@ -703,30 +698,64 @@ export default function Home() {
       <div className="hidden md:flex items-center justify-center p-8 min-h-[100dvh]">
         <div className="w-full max-w-[1400px] h-[90vh] min-h-[700px] bg-white/40 dark:bg-black/20 backdrop-blur-3xl rounded-[2rem] border border-white/50 dark:border-white/10 shadow-2xl overflow-hidden flex flex-row">
 
-          {/* Notes area */}
-          <div className="flex-1 flex flex-col h-full bg-card/60 min-w-0">
-            <div className="h-20 flex items-center justify-between px-8 border-b border-border/40 shrink-0 gap-4">
-              <div className="flex items-center flex-1 max-w-[200px] relative">
-                <Search className="w-4 h-4 absolute left-3 text-muted-foreground" />
-                <Input className="pl-9 h-9 bg-muted/50 border-none rounded-full text-sm font-sans focus-visible:ring-1" placeholder="Search notes..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-              </div>
-              <h1 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Sanctuary</h1>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary" onClick={handleAddNote}>
-                  <Plus className="w-4 h-4" />
-                </Button>
-                <button onClick={() => setSettingsOpen(true)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-                  <SlidersHorizontal className="w-4 h-4" />
-                </button>
-              </div>
+          {/* ── Icon nav rail ── */}
+          <div className="w-16 flex flex-col items-center pt-7 pb-5 border-r border-border/40 bg-card/30 shrink-0">
+            <span className="text-[11px] tracking-[0.2em] text-muted-foreground/40 font-sans uppercase mb-8 select-none">S</span>
+
+            <div className="flex flex-col gap-2 flex-1">
+              <button
+                onClick={() => setActiveSection('notes')}
+                title="Notes"
+                className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150",
+                  activeSection === 'notes'
+                    ? "bg-primary/12 text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}>
+                <PenLine className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={() => setActiveSection('music')}
+                title="Music"
+                className={cn(
+                  "relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150",
+                  activeSection === 'music'
+                    ? "bg-primary/12 text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}>
+                <ListMusic className="w-5 h-5" />
+                {isPlaying && activeSection !== 'music' && (
+                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+                )}
+              </button>
             </div>
 
-            <div className="flex-1 flex overflow-hidden min-h-0">
-              {/* Notes sidebar */}
-              <div className="w-80 border-r border-border/40 flex flex-col shrink-0 bg-secondary/20 h-full">
+            {/* Settings at bottom-left */}
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="Settings"
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-150">
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* ── Content area ── */}
+          {activeSection === 'notes' ? (
+            <>
+              {/* Notes list panel */}
+              <div className="w-72 xl:w-80 border-r border-border/40 flex flex-col shrink-0 bg-secondary/20 h-full">
+                <div className="h-16 flex items-center justify-between px-4 border-b border-border/40 shrink-0 gap-3">
+                  <div className="flex items-center flex-1 relative">
+                    <Search className="w-4 h-4 absolute left-3 text-muted-foreground" />
+                    <Input className="pl-9 h-9 bg-muted/50 border-none rounded-full text-sm font-sans focus-visible:ring-1" placeholder="Search notes..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                  </div>
+                  <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary shrink-0" onClick={handleAddNote}>
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
                 <ScrollArea className="flex-1 h-full">
-                  <div className="p-4 flex flex-col gap-2">
+                  <div className="p-3 flex flex-col gap-2">
                     {filteredNotes.map(note => (
                       <button key={note.id} onClick={() => setActiveNoteId(note.id)}
                         className={cn("w-full text-left p-4 rounded-xl transition-all duration-200 border text-sm",
@@ -741,12 +770,13 @@ export default function Home() {
                 </ScrollArea>
               </div>
 
-              {/* Editor */}
-              <div className="flex-1 flex flex-col p-12 overflow-y-auto h-full">
+              {/* Note editor */}
+              <div className="flex-1 flex flex-col overflow-y-auto h-full bg-card/60">
                 {activeNote ? (
-                  <div className="max-w-2xl mx-auto w-full mt-4 h-full flex flex-col">
+                  <div className="max-w-2xl mx-auto w-full px-12 pt-14 pb-12 h-full flex flex-col">
                     <input type="text" value={activeNote.title} onChange={e => updateActiveNote({ title: e.target.value })}
-                      className="w-full text-4xl font-serif font-medium bg-transparent border-none outline-none mb-6 text-foreground placeholder-muted-foreground/50 focus:ring-0" placeholder="Note Title" />
+                      className="w-full text-4xl font-serif font-medium bg-transparent border-none outline-none mb-6 text-foreground placeholder-muted-foreground/50 focus:ring-0"
+                      placeholder="Note Title" />
                     <p className="text-sm text-muted-foreground font-sans tracking-wide mb-12 flex items-center gap-2">
                       <PenLine className="w-3 h-3" />{activeNote.date}
                     </p>
@@ -764,13 +794,13 @@ export default function Home() {
                   <div className="h-full flex items-center justify-center text-muted-foreground font-sans text-sm">Select a note or create a new one</div>
                 )}
               </div>
+            </>
+          ) : (
+            /* Music player — full content area */
+            <div className="flex-1 h-full bg-secondary/30 overflow-y-auto">
+              {MusicPlayer}
             </div>
-          </div>
-
-          {/* Music player */}
-          <div className="w-[380px] lg:w-[420px] h-full bg-secondary/40 border-l border-border/40 flex flex-col shrink-0">
-            {MusicPlayer}
-          </div>
+          )}
         </div>
       </div>
 
@@ -783,21 +813,29 @@ export default function Home() {
           )}
         </div>
 
-        {/* Bottom tab bar */}
-        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border/50 flex relative">
-          <button onClick={() => { setMobileTab('notes'); }}
+        {/* Bottom tab bar — Settings on far left */}
+        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border/50 flex">
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-16 flex flex-col items-center justify-center py-3 gap-1 text-muted-foreground border-r border-border/30 shrink-0 transition-colors hover:text-foreground">
+            <Settings className="w-5 h-5" />
+            <span className="text-[10px] font-sans tracking-wide">设置</span>
+          </button>
+
+          <button onClick={() => setMobileTab('notes')}
             className={cn("flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-sans tracking-wide transition-colors",
               mobileTab === 'notes' ? "text-primary" : "text-muted-foreground")}>
             <PenLine className="w-5 h-5" />
             Notes
           </button>
+
           <button onClick={() => setMobileTab('player')}
             className={cn("flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-sans tracking-wide transition-colors relative",
               mobileTab === 'player' ? "text-primary" : "text-muted-foreground")}>
             <ListMusic className="w-5 h-5" />
             Music
             {isPlaying && mobileTab !== 'player' && (
-              <span className="absolute top-2.5 right-8 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+              <span className="absolute top-2.5 right-6 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
             )}
           </button>
         </div>
