@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,10 +43,6 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Capacitor CLI
-        working-directory: artifacts/sanctuary-app
-        run: npx cap --version
 
       - name: Add Android platform
         working-directory: artifacts/sanctuary-app
