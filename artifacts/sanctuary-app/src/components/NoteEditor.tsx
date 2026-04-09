@@ -28,43 +28,18 @@ function toggleMarker(
 ): { newContent: string; newStart: number; newEnd: number } {
   const m = marker.length;
   if (isWrapped(content, start, end, marker)) {
-    // Remove markers
     const newContent = content.substring(0, start - m) + content.substring(start, end) + content.substring(end + m);
     return { newContent, newStart: start - m, newEnd: end - m };
   } else {
-    // Add markers
     const newContent = content.substring(0, start) + marker + content.substring(start, end) + marker + content.substring(end);
     return { newContent, newStart: start + m, newEnd: end + m };
   }
 }
 
 function clearAllMarkers(content: string, start: number, end: number): { newContent: string } {
-  // Remove bold, italic, highlight markers from the selected range
-  const m = marker => marker.length;
   const selected = content.substring(start, end);
-  const cleaned = selected.replace(/\*\*/g, '').replace(/_/g, '').replace(/==/g, '');
+  const cleaned = selected.replace(/\*\*/g, '').replace(/==/g, '').replace(/_/g, '');
   return { newContent: content.substring(0, start) + cleaned + content.substring(end) };
-}
-
-// ── Inline rendering of markdown in display mode ─────────────────────────────
-
-function renderInlineMarkdown(text: string): React.ReactNode[] {
-  // Split on bold, italic, highlight markers
-  const parts: React.ReactNode[] = [];
-  const re = /(\*\*[\s\S]*?\*\*|==[\s\S]*?==|_[\s\S]*?_)/g;
-  let last = 0;
-  let key = 0;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
-    if (match.index > last) parts.push(text.slice(last, match.index));
-    const token = match[0];
-    if (token.startsWith('**'))       parts.push(<strong key={key++}>{token.slice(2, -2)}</strong>);
-    else if (token.startsWith('==')) parts.push(<mark key={key++} style={{ backgroundColor: 'hsl(var(--primary) / 0.2)', borderRadius: '2px', padding: '0 1px' }}>{token.slice(2, -2)}</mark>);
-    else if (token.startsWith('_'))  parts.push(<em key={key++}>{token.slice(1, -1)}</em>);
-    last = match.index + token.length;
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -99,19 +74,19 @@ export const NoteEditor = memo(function NoteEditor({
   const [selection, setSelection] = useState<SelectionState | null>(null);
 
   // Detect selection on mouseup/touchend
-  const handleSelectionEvent = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const handleSelectionEvent = useCallback((e: React.MouseEvent<HTMLTextAreaElement> | React.TouchEvent<HTMLTextAreaElement>) => {
     if (!formattingEnabled) return;
     const ta = textareaRef.current;
     if (!ta) return;
     const { selectionStart: start, selectionEnd: end } = ta;
-    if (start === end) { setSelection(null); return; }
+    if (start === null || end === null || start === end) { setSelection(null); return; }
 
-    const clientX = 'touches' in e
-      ? (e as React.TouchEvent).changedTouches[0]?.clientX ?? 0
-      : (e as React.MouseEvent).clientX;
-    const clientY = 'touches' in e
-      ? (e as React.TouchEvent).changedTouches[0]?.clientY ?? 0
-      : (e as React.MouseEvent).clientY;
+    const clientX = 'changedTouches' in e
+      ? e.changedTouches[0]?.clientX ?? 0
+      : e.clientX;
+    const clientY = 'changedTouches' in e
+      ? e.changedTouches[0]?.clientY ?? 0
+      : e.clientY;
 
     setSelection({ x: clientX, y: clientY, start, end });
   }, [formattingEnabled]);
@@ -120,9 +95,8 @@ export const NoteEditor = memo(function NoteEditor({
     if (!selection || !activeNote) return;
     const marker = MARKERS[key];
     const { newContent, newStart, newEnd } = toggleMarker(activeNote.content, selection.start, selection.end, marker);
-    onUpdateNote({ content: newContent, preview: newContent.substring(0, 80) });
+    onUpdateNote({ content: newContent, preview: newContent.replace(/[*_=]/g, '').substring(0, 80) });
     setSelection({ ...selection, start: newStart, end: newEnd });
-    // Restore focus + selection to textarea
     setTimeout(() => {
       const ta = textareaRef.current;
       if (!ta) return;
@@ -134,23 +108,25 @@ export const NoteEditor = memo(function NoteEditor({
   const clearFormat = useCallback(() => {
     if (!selection || !activeNote) return;
     const { newContent } = clearAllMarkers(activeNote.content, selection.start, selection.end);
-    onUpdateNote({ content: newContent, preview: newContent.substring(0, 80) });
+    onUpdateNote({ content: newContent, preview: newContent.replace(/[*_=]/g, '').substring(0, 80) });
     setSelection(null);
   }, [selection, activeNote, onUpdateNote]);
 
-  // Detect formatting state at selection
-  const selBold      = selection ? isWrapped(activeNote?.content ?? '', selection.start, selection.end, MARKERS.bold)      : false;
-  const selItalic    = selection ? isWrapped(activeNote?.content ?? '', selection.start, selection.end, MARKERS.italic)    : false;
-  const selHighlight = selection ? isWrapped(activeNote?.content ?? '', selection.start, selection.end, MARKERS.highlight) : false;
+  // Detect current formatting state at selection
+  const content = activeNote?.content ?? '';
+  const selBold      = selection ? isWrapped(content, selection.start, selection.end, MARKERS.bold)      : false;
+  const selItalic    = selection ? isWrapped(content, selection.start, selection.end, MARKERS.italic)    : false;
+  const selHighlight = selection ? isWrapped(content, selection.start, selection.end, MARKERS.highlight) : false;
 
-  // Build typography inline styles
+  // Typography inline styles (override Tailwind presets when fine-grained value is set)
   const typoStyle: React.CSSProperties = {};
   if (fontSizeNum > 0)   typoStyle.fontSize   = `${fontSizeNum}px`;
   if (lineHeightNum > 0) typoStyle.lineHeight  = lineHeightNum;
 
   const typoClass = cn(
-    "w-full min-h-[60vh] resize-none bg-transparent border-none outline-none text-foreground/80 placeholder-muted-foreground/30 focus:ring-0",
-    fontSizeNum === 0 ? FONT_SIZE_MAP[fontSize]    : '',
+    "w-full min-h-[60vh] resize-none bg-transparent border-none outline-none",
+    "text-foreground/80 placeholder-muted-foreground/30 focus:ring-0",
+    fontSizeNum   === 0 ? FONT_SIZE_MAP[fontSize]    : '',
     lineHeightNum === 0 ? LINE_HEIGHT_MAP[lineHeight] : '',
     editorFont === 'serif' ? 'font-serif' : 'font-sans'
   );
@@ -174,8 +150,11 @@ export const NoteEditor = memo(function NoteEditor({
         )}
       </div>
 
-      {/* Editor content */}
-      <div className="flex-1 overflow-y-auto" onClick={() => { if (!selection) return; setSelection(null); }}>
+      {/* Editor area */}
+      <div
+        className="flex-1 overflow-y-auto"
+        onClick={() => setSelection(null)}
+      >
         {activeNote ? (
           <div className="max-w-2xl mx-auto px-8 md:px-16 pt-14 pb-16">
             <input
@@ -192,7 +171,10 @@ export const NoteEditor = memo(function NoteEditor({
             <textarea
               ref={textareaRef}
               value={activeNote.content}
-              onChange={e => onUpdateNote({ content: e.target.value, preview: e.target.value.substring(0, 80) + '...' })}
+              onChange={e => onUpdateNote({
+                content: e.target.value,
+                preview: e.target.value.replace(/[*_=]/g, '').substring(0, 80) + '...',
+              })}
               onMouseUp={handleSelectionEvent}
               onTouchEnd={handleSelectionEvent}
               onKeyUp={() => setSelection(null)}

@@ -3,43 +3,30 @@ import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { EditorFont } from '@/lib/types';
 
-// Preset fallback display values
-const FONT_SIZE_PRESETS: Record<string, number> = { sm: 15, md: 18, lg: 21 };
+// Preset fallback pixel values
+const FONT_SIZE_PRESETS: Record<string, number>   = { sm: 15, md: 18, lg: 21 };
 const LINE_HEIGHT_PRESETS: Record<string, number> = { tight: 1.8, normal: 2.2, relaxed: 2.8 };
 
-type Props = {
-  open: boolean;
-  onClose: () => void;
-
-  editorFont: EditorFont;
-  onEditorFont: (v: EditorFont) => void;
-
-  fontSizeNum: number;          // 0 = use preset
-  onFontSizeNum: (v: number) => void;
-  lineHeightNum: number;        // 0 = use preset
-  onLineHeightNum: (v: number) => void;
-
-  // for display-only when custom is 0
-  fontSizePreset: string;
-  lineHeightPreset: string;
-
-  formattingEnabled: boolean;
-  onFormattingEnabled: (v: boolean) => void;
+type SliderRowProps = {
+  label: string;
+  effectiveValue: number;   // The value the slider thumb should sit at
+  isCustom: boolean;        // Whether a custom override is active (show Reset)
+  min: number; max: number; step: number;
+  display: string;
+  onChange: (v: number) => void;
+  onReset: () => void;
 };
 
-function SliderRow({
-  label, value, min, max, step, display, onChange, onReset,
-}: {
-  label: string; value: number; min: number; max: number; step: number;
-  display: string; onChange: (v: number) => void; onReset: () => void;
-}) {
+function SliderRow({ label, effectiveValue, isCustom, min, max, step, display, onChange, onReset }: SliderRowProps) {
+  const pct = ((effectiveValue - min) / (max - min)) * 100;
+
   return (
-    <div className="mb-5">
+    <div className="mb-6">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] font-sans font-medium tracking-[0.12em] uppercase text-muted-foreground">{label}</span>
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-sans text-foreground tabular-nums">{display}</span>
-          {value !== 0 && (
+          {isCustom && (
             <button onClick={onReset}
               className="text-[10px] font-sans text-muted-foreground/60 hover:text-muted-foreground transition-colors px-1.5 py-0.5 rounded bg-muted/40">
               重置
@@ -47,27 +34,25 @@ function SliderRow({
           )}
         </div>
       </div>
-      <div className="relative h-5 flex items-center">
-        <div className="absolute left-0 right-0 h-1 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary/50 rounded-full transition-all"
-            style={{ width: `${((value || min) - min) / (max - min) * 100}%` }}
-          />
+      <div className="relative h-5 flex items-center select-none">
+        {/* Track */}
+        <div className="absolute left-0 right-0 h-[3px] bg-muted rounded-full overflow-hidden">
+          <div className="h-full bg-primary/60 rounded-full" style={{ width: `${pct}%` }} />
         </div>
+        {/* Invisible native range for input handling */}
         <input
           type="range" min={min} max={max} step={step}
-          value={value || min}
+          value={effectiveValue}
           onChange={e => onChange(Number(e.target.value))}
           className="absolute inset-0 w-full opacity-0 cursor-pointer h-5"
         />
-        {/* Thumb */}
+        {/* Visual thumb */}
         <div
-          className="absolute w-4 h-4 rounded-full bg-primary shadow-md border-2 border-background pointer-events-none transition-all"
-          style={{ left: `calc(${((value || min) - min) / (max - min) * 100}% - 8px)` }}
+          className="absolute w-4 h-4 rounded-full bg-primary shadow-md border-2 border-background pointer-events-none"
+          style={{ left: `calc(${pct}% - 8px)` }}
         />
       </div>
-      {/* Tick labels */}
-      <div className="flex justify-between mt-1.5">
+      <div className="flex justify-between mt-1">
         <span className="text-[10px] font-sans text-muted-foreground/40">{min}</span>
         <span className="text-[10px] font-sans text-muted-foreground/40">{max}</span>
       </div>
@@ -81,15 +66,15 @@ function Toggle({ enabled, onToggle, label }: { enabled: boolean; onToggle: () =
       <span className="text-sm font-sans text-foreground/80">{label}</span>
       <button
         onClick={onToggle}
+        aria-label={label}
         className={cn(
-          "relative w-10 h-5.5 rounded-full transition-colors duration-200 shrink-0 flex items-center",
+          "relative rounded-full transition-colors duration-200 shrink-0 flex items-center",
           enabled ? "bg-primary" : "bg-muted"
         )}
-        style={{ height: '22px' }}
-        aria-label={label}
+        style={{ width: '42px', height: '24px' }}
       >
         <span className={cn(
-          "absolute top-[3px] left-[3px] w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200",
+          "absolute top-[4px] left-[4px] w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200",
           enabled ? "translate-x-[18px]" : "translate-x-0"
         )} />
       </button>
@@ -97,10 +82,26 @@ function Toggle({ enabled, onToggle, label }: { enabled: boolean; onToggle: () =
   );
 }
 
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  editorFont: EditorFont;
+  onEditorFont: (v: EditorFont) => void;
+  fontSizeNum: number;
+  onFontSizeNum: (v: number) => void;
+  lineHeightNum: number;
+  onLineHeightNum: (v: number) => void;
+  fontSizePreset: string;
+  lineHeightPreset: string;
+  formattingEnabled: boolean;
+  onFormattingEnabled: (v: boolean) => void;
+};
+
 export function TypographyPanel({
   open, onClose,
   editorFont, onEditorFont,
-  fontSizeNum, onFontSizeNum, lineHeightNum, onLineHeightNum,
+  fontSizeNum, onFontSizeNum,
+  lineHeightNum, onLineHeightNum,
   fontSizePreset, lineHeightPreset,
   formattingEnabled, onFormattingEnabled,
 }: Props) {
@@ -113,27 +114,30 @@ export function TypographyPanel({
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
-  const fsSizeVal = fontSizeNum || FONT_SIZE_PRESETS[fontSizePreset] || 18;
-  const lhVal     = lineHeightNum || LINE_HEIGHT_PRESETS[lineHeightPreset] || 2.2;
+  // Effective values: use custom if set, otherwise fall back to preset
+  const effectiveFontSize   = fontSizeNum   > 0 ? fontSizeNum   : (FONT_SIZE_PRESETS[fontSizePreset]   ?? 18);
+  const effectiveLineHeight = lineHeightNum > 0 ? lineHeightNum : (LINE_HEIGHT_PRESETS[lineHeightPreset] ?? 2.2);
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop — sits above SettingsPanel (z-50) but below this panel */}
       <div
         onClick={onClose}
         className={cn(
-          "fixed inset-0 z-55 bg-black/10 backdrop-blur-[1px] transition-opacity duration-300",
+          "fixed inset-0 bg-black/10 backdrop-blur-[1px] transition-opacity duration-300",
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
+        style={{ zIndex: 55 }}
       />
       {/* Panel */}
       <div
         ref={panelRef}
         className={cn(
-          "fixed top-0 right-0 h-full z-[60] w-72 bg-card border-l border-border shadow-2xl flex flex-col",
+          "fixed top-0 right-0 h-full w-72 bg-card border-l border-border shadow-2xl flex flex-col",
           "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
           open ? "translate-x-0" : "translate-x-full"
         )}
+        style={{ zIndex: 60 }}
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-border/60 shrink-0">
@@ -144,15 +148,16 @@ export function TypographyPanel({
           <span className="text-sm font-medium text-foreground tracking-wide">字形设置</span>
         </div>
 
-        {/* Content */}
+        {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
 
           {/* Font size slider */}
           <SliderRow
             label="字号"
-            value={fontSizeNum}
+            effectiveValue={effectiveFontSize}
+            isCustom={fontSizeNum > 0}
             min={12} max={28} step={1}
-            display={`${Math.round(fsSizeVal)}px`}
+            display={`${Math.round(effectiveFontSize)}px`}
             onChange={onFontSizeNum}
             onReset={() => onFontSizeNum(0)}
           />
@@ -160,15 +165,16 @@ export function TypographyPanel({
           {/* Line height slider */}
           <SliderRow
             label="行距"
-            value={lineHeightNum}
+            effectiveValue={effectiveLineHeight}
+            isCustom={lineHeightNum > 0}
             min={1.4} max={3.2} step={0.1}
-            display={lhVal.toFixed(1)}
+            display={effectiveLineHeight.toFixed(1)}
             onChange={onLineHeightNum}
             onReset={() => onLineHeightNum(0)}
           />
 
           {/* Font family */}
-          <div className="mb-5">
+          <div className="mb-6">
             <p className="text-[11px] font-sans font-medium tracking-[0.12em] uppercase text-muted-foreground mb-2.5">字体</p>
             <div className="flex gap-2">
               {(['serif', 'sans'] as EditorFont[]).map(f => (
@@ -190,29 +196,33 @@ export function TypographyPanel({
             </div>
           </div>
 
-          {/* Preview */}
+          {/* Live preview */}
           <div className="mb-6 px-4 py-4 rounded-xl bg-muted/30 border border-border/30">
             <p className="text-[10px] font-sans text-muted-foreground/60 mb-2 tracking-widest uppercase">预览</p>
             <p
-              className={cn(editorFont === 'serif' ? 'font-serif' : 'font-sans', 'text-foreground/80')}
-              style={{ fontSize: `${Math.round(fsSizeVal)}px`, lineHeight: lhVal }}
+              className={cn(editorFont === 'serif' ? 'font-serif' : 'font-sans', 'text-foreground/80 break-words')}
+              style={{ fontSize: `${Math.round(effectiveFontSize)}px`, lineHeight: effectiveLineHeight }}
             >
               千里之行，始于足下。
             </p>
           </div>
 
+          {/* Formatting toggle */}
           <div className="border-t border-border/30 pt-5">
             <p className="text-[11px] font-sans font-medium tracking-[0.12em] uppercase text-muted-foreground mb-4">文字标注</p>
             <Toggle
               enabled={formattingEnabled}
               onToggle={() => onFormattingEnabled(!formattingEnabled)}
-              label="长按正文启用标注"
+              label="选中文字启用标注"
             />
-            {formattingEnabled && (
-              <p className="text-[11px] font-sans text-muted-foreground/50 mt-2 leading-relaxed">
-                在笔记正文中选中文字，会出现标注工具栏（加粗、斜体、高亮）
-              </p>
-            )}
+            <p className={cn(
+              "text-[11px] font-sans leading-relaxed mt-2 transition-all duration-200",
+              formattingEnabled ? "text-muted-foreground/60" : "text-muted-foreground/30"
+            )}>
+              {formattingEnabled
+                ? "在笔记正文中选中文字，将出现标注工具栏"
+                : "开启后可对正文进行加粗、斜体、高亮标注"}
+            </p>
           </div>
         </div>
       </div>

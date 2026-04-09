@@ -59,7 +59,6 @@ export default function Home() {
         onOpenSettings={openSettings}
         onOpenLibrary={openLibrary}
 
-        notes={notes.notes}
         filteredNotes={notes.filteredNotes}
         activeNoteId={notes.activeNoteId}
         searchQuery={notes.searchQuery}

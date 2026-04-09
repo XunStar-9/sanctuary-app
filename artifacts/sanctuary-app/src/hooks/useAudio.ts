@@ -29,8 +29,6 @@ export function useAudio() {
   const [isRepeat,          setIsRepeat]          = useState(false);
   const [currentTime,       setCurrentTime]       = useState(0);
   const [duration,          setDuration]          = useState(0);
-  const [volume,            setVolume]            = useState(70);
-  const [isMuted,           setIsMuted]           = useState(false);
   const [isDragging,        setIsDragging]        = useState(false);
 
   const audioRef    = useRef<HTMLAudioElement | null>(null);
@@ -41,22 +39,25 @@ export function useAudio() {
     return n === prev ? (n + 1) % len : n;
   }, []);
 
-  const isShuffleRef  = useRef(isShuffle);
-  const playlistRef   = useRef(playlist);
-  useEffect(() => { isShuffleRef.current  = isShuffle;  }, [isShuffle]);
-  useEffect(() => { playlistRef.current   = playlist;   }, [playlist]);
+  // Use refs for event handler closures so they always see the latest values
+  const isShuffleRef = useRef(isShuffle);
+  const isRepeatRef  = useRef(isRepeat);
+  const playlistRef  = useRef(playlist);
+  useEffect(() => { isShuffleRef.current = isShuffle;  }, [isShuffle]);
+  useEffect(() => { isRepeatRef.current  = isRepeat;   }, [isRepeat]);
+  useEffect(() => { playlistRef.current  = playlist;   }, [playlist]);
 
   useEffect(() => {
     const audio = new Audio();
     audioRef.current = audio;
-    audio.volume = volume / 100;
 
-    const onTimeUpdate    = () => { if (!isDragging) setCurrentTime(audio.currentTime); };
+    const onTimeUpdate     = () => { if (!isDragging) setCurrentTime(audio.currentTime); };
     const onDurationChange = () => { if (isFinite(audio.duration)) setDuration(audio.duration); };
     const onPlay  = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onEnded = () => {
-      if (isRepeat) { audio.currentTime = 0; audio.play(); return; }
+      // Use refs to avoid stale closures
+      if (isRepeatRef.current) { audio.currentTime = 0; audio.play(); return; }
       const len = playlistRef.current.length;
       setCurrentSongIndex(prev =>
         isShuffleRef.current ? shuffleNext(prev, len) : (prev + 1) % len
@@ -102,10 +103,6 @@ export function useAudio() {
     if (isPlaying) audio.play().catch(() => {});
     else           audio.pause();
   }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = isMuted ? 0 : volume / 100;
-  }, [volume, isMuted]);
 
   const currentSong = playlist[currentSongIndex] ?? playlist[0];
 
@@ -183,16 +180,15 @@ export function useAudio() {
 
   const toggleShuffle = useCallback(() => setIsShuffle(p => !p), []);
   const toggleRepeat  = useCallback(() => setIsRepeat(p => !p),  []);
-  const toggleMute    = useCallback(() => setIsMuted(p => !p),   []);
 
   return {
     playlist, currentSong, currentSongIndex,
-    isPlaying, isShuffle, isRepeat, currentTime, duration, volume, isMuted, isDragging,
+    isPlaying, isShuffle, isRepeat, currentTime, duration, isDragging,
     audioRef, fileInputRef,
-    setVolume, setIsDragging,
+    setIsDragging,
     handlePlayPause, handleNext, handlePrev, handleSelectSong,
     handleSeek, progressPct, displayTime, displayDuration,
     handleUploadClick, handleFileChange, handleRemoveSong,
-    toggleShuffle, toggleRepeat, toggleMute,
+    toggleShuffle, toggleRepeat,
   };
 }

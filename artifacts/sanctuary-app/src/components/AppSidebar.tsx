@@ -10,7 +10,6 @@ type Props = {
   onOpenSettings: () => void;
   onOpenLibrary: () => void;
 
-  notes: Note[];
   filteredNotes: Note[];
   activeNoteId: string;
   searchQuery: string;
