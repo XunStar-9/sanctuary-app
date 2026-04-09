@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX,
-  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2, SlidersHorizontal, X, Settings
+  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2, SlidersHorizontal, X, Settings, Menu
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -191,8 +191,6 @@ type Song = {
   isUploaded?: boolean;
 };
 
-type MobileView = 'notes-list' | 'note-editor' | 'player';
-
 // ─── Gradients pool for uploaded songs ───────────────────────────────────────
 
 const GRADIENTS = [
@@ -301,9 +299,7 @@ export default function Home() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(70);
   const [isMuted, setIsMuted] = useState(false);
-  const [activeSection, setActiveSection] = useState<'notes' | 'music'>('notes');
-  const [mobileView, setMobileView] = useState<MobileView>('notes-list');
-  const [mobileTab, setMobileTab] = useState<'notes' | 'player'>('notes');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -477,7 +473,6 @@ export default function Home() {
     };
     setNotes([n, ...notes]);
     setActiveNoteId(n.id);
-    setMobileView('note-editor');
   };
 
   const updateActiveNote = (updates: Partial<Note>) => {
@@ -490,354 +485,239 @@ export default function Home() {
     n.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSelectNote = (id: string) => { setActiveNoteId(id); setMobileView('note-editor'); };
+  // ─── Render ──────────────────────────────────────────────────────────────────
 
-  // ── Sub-components ────────────────────────────────────────────────────────
+  return (
+    <div className="h-[100dvh] bg-background text-foreground font-serif selection:bg-primary/20 flex overflow-hidden">
 
-  const NotesList = (
-    <div className="flex flex-col h-full">
-      <div className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 border-b border-border/40 shrink-0 gap-3">
-        <div className="flex items-center flex-1 relative">
-          <Search className="w-4 h-4 absolute left-3 text-muted-foreground" />
-          <Input className="pl-9 h-9 bg-muted/50 border-none rounded-full text-sm font-sans focus-visible:ring-1" placeholder="Search notes..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-        </div>
-        <span className="text-xs font-sans tracking-widest uppercase text-muted-foreground hidden md:block select-none">Notes</span>
-        <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary shrink-0" onClick={handleAddNote}>
-          <Plus className="w-4 h-4" />
-        </Button>
-      </div>
-      <ScrollArea className="flex-1">
-        <div className="p-3 md:p-4 flex flex-col gap-2">
-          {filteredNotes.map(note => (
-            <button key={note.id} onClick={() => handleSelectNote(note.id)}
-              className={cn("w-full text-left p-4 rounded-xl transition-all duration-200 border text-sm",
-                activeNoteId === note.id ? "bg-white/80 dark:bg-white/5 border-primary/20 shadow-sm" : "bg-transparent border-transparent hover:bg-white/40 dark:hover:bg-white/5")}>
-              <h3 className="font-semibold text-foreground mb-1 line-clamp-1">{note.title}</h3>
-              <p className="text-xs text-muted-foreground mb-1.5 font-sans tracking-wide">{note.date}</p>
-              <p className="text-muted-foreground line-clamp-2 leading-relaxed text-[13px]">{note.preview || note.content.substring(0, 60)}</p>
-            </button>
-          ))}
-          {filteredNotes.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm font-sans">No notes found.</div>}
-        </div>
-      </ScrollArea>
-    </div>
-  );
-
-  const NoteEditor = (
-    <div className="flex flex-col h-full">
-      <div className="h-16 md:h-20 flex items-center px-4 md:px-8 border-b border-border/40 shrink-0 gap-3">
-        <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-muted-foreground md:hidden shrink-0" onClick={() => setMobileView('notes-list')}>
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <span className="text-xs font-sans tracking-widest uppercase text-muted-foreground truncate">{activeNote?.title || 'Note'}</span>
-      </div>
-      <div className="flex-1 overflow-y-auto p-6 md:p-12">
-        {activeNote ? (
-          <div className="max-w-2xl mx-auto w-full">
-            <input type="text" value={activeNote.title} onChange={e => updateActiveNote({ title: e.target.value })}
-              className="w-full text-3xl md:text-4xl font-serif font-medium bg-transparent border-none outline-none mb-4 text-foreground placeholder-muted-foreground/50 focus:ring-0" placeholder="Note Title" />
-            <p className="text-sm text-muted-foreground font-sans tracking-wide mb-8 flex items-center gap-2">
-              <PenLine className="w-3 h-3" />{activeNote.date}
-            </p>
-            <textarea value={activeNote.content}
-              onChange={e => updateActiveNote({ content: e.target.value, preview: e.target.value.substring(0, 80) + '...' })}
-              className={cn(
-                "w-full min-h-[50vh] resize-none bg-transparent border-none outline-none text-foreground/80 placeholder-muted-foreground/30 focus:ring-0",
-                FONT_SIZE_MAP[fontSize],
-                LINE_HEIGHT_MAP[lineHeight],
-                editorFont === 'serif' ? 'font-serif' : 'font-sans'
-              )}
-              placeholder="Start writing..." />
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center text-muted-foreground font-sans text-sm">Select a note or create a new one</div>
+      {/* ── Sidebar backdrop (click to close on mobile) ── */}
+      <div
+        onClick={() => setSidebarOpen(false)}
+        className={cn(
+          "fixed inset-0 z-30 bg-black/15 backdrop-blur-[2px] md:hidden transition-opacity duration-300",
+          sidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
-      </div>
-    </div>
-  );
+      />
 
-  const MusicPlayer = (
-    <div className="flex flex-col h-full">
-      {/* Hidden file input */}
-      <input ref={fileInputRef} type="file" accept="audio/*" multiple className="hidden" onChange={handleFileChange} />
+      {/* ── Slide-in Sidebar ── */}
+      <aside className={cn(
+        "fixed md:relative left-0 top-0 bottom-0 z-40 flex flex-col",
+        "w-[300px] bg-card/80 backdrop-blur-2xl border-r border-border/40",
+        "transition-transform duration-300 ease-in-out shrink-0",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full md:-translate-x-full"
+      )}>
+        {/* Hidden file input */}
+        <input ref={fileInputRef} type="file" accept="audio/*" multiple className="hidden" onChange={handleFileChange} />
 
-      {/* Player header */}
-      <div className="px-6 md:px-8 pt-6 md:pt-8 pb-4 flex flex-col items-center shrink-0">
-
-        {/* Album art */}
-        <div className="w-48 h-48 md:w-60 md:h-60 rounded-2xl shadow-xl overflow-hidden mb-5 relative">
-          {currentSong ? (
-            <div className={cn("w-full h-full bg-gradient-to-br transition-all duration-1000", currentSong.gradient)}>
-              {currentSong.isUploaded && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Music className="w-10 h-10 text-white/40" />
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="w-full h-full bg-muted flex items-center justify-center">
-              <Music className="w-10 h-10 text-muted-foreground/30" />
-            </div>
-          )}
-        </div>
-
-        {/* Song info + upload trigger */}
-        <div className="text-center mb-5 w-full relative">
-          <h2 className="text-xl md:text-2xl font-serif font-medium mb-1 truncate px-8">{currentSong?.title ?? 'No song'}</h2>
-          <p className="text-muted-foreground font-sans text-sm tracking-wide">{currentSong?.artist ?? ''}</p>
-        </div>
-
-        {/* Progress */}
-        <div className="w-full mb-5 px-2">
-          <Slider value={[progressPct()]} max={100} step={0.1}
-            className="[&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
-            onValueChange={handleSeek}
-            onPointerDown={() => setIsDragging(true)}
-            onPointerUp={() => setIsDragging(false)}
-          />
-          <div className="flex justify-between items-center mt-2 text-[11px] font-sans tracking-wider text-muted-foreground">
-            <span>{displayTime()}</span>
-            <span>{displayDuration()}</span>
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center justify-center gap-4 mb-4 w-full">
-          <Button variant="ghost" size="icon" onClick={() => setIsShuffle(p => !p)}
-            className={cn("transition-colors", isShuffle ? "text-primary" : "text-muted-foreground hover:text-foreground")}>
-            <Shuffle className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="text-foreground hover:bg-white/40 dark:hover:bg-white/10 rounded-full w-10 h-10" onClick={handlePrev}>
-            <SkipBack className="w-5 h-5 fill-current" />
-          </Button>
-          <Button variant="default" size="icon"
-            className="w-14 h-14 md:w-16 md:h-16 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95 bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={handlePlayPause}>
-            {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="text-foreground hover:bg-white/40 dark:hover:bg-white/10 rounded-full w-10 h-10" onClick={handleNext}>
-            <SkipForward className="w-5 h-5 fill-current" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => setIsRepeat(p => !p)}
-            className={cn("transition-colors", isRepeat ? "text-primary" : "text-muted-foreground hover:text-foreground")}>
-            <Repeat className="w-4 h-4" />
-          </Button>
-        </div>
-
-        {/* Volume */}
-        <div className="flex items-center gap-3 w-full px-6">
-          <button onClick={() => setIsMuted(p => !p)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
-            {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+        {/* Sidebar header */}
+        <div className="flex items-center justify-between px-5 pt-6 pb-4 shrink-0">
+          <span className="text-xs font-sans tracking-[0.2em] uppercase text-muted-foreground/50 select-none">Sanctuary</span>
+          <button onClick={() => setSidebarOpen(false)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-muted/50 transition-colors">
+            <X className="w-4 h-4" />
           </button>
-          <Slider value={[isMuted ? 0 : volume]} max={100} step={1}
-            className="w-full [&_[role=slider]]:h-2 [&_[role=slider]]:w-2"
-            onValueChange={val => { setVolume(val[0]); setIsMuted(false); }} />
         </div>
-      </div>
 
-      {/* Playlist */}
-      <div className="px-4 md:px-5 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div className="flex items-center justify-between mb-3 px-2">
-          <div className="flex items-center gap-2 text-xs font-sans tracking-widest uppercase text-muted-foreground">
-            <ListMusic className="w-3.5 h-3.5" />
-            Up Next
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+
+          {/* ── Notes section ── */}
+          <div className="px-5 mb-1">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-sans tracking-[0.15em] uppercase text-muted-foreground/60">Notes</span>
+              <button onClick={handleAddNote}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="relative mb-3">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+              <input
+                className="w-full pl-8 pr-3 h-8 bg-muted/50 rounded-full text-[13px] font-sans border-none outline-none focus:ring-1 focus:ring-primary/30 placeholder-muted-foreground/40"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
-          <Button variant="ghost" size="sm"
-            className="h-7 px-2.5 text-xs font-sans text-muted-foreground hover:text-primary gap-1.5 rounded-full hover:bg-primary/10"
-            onClick={handleUploadClick}>
-            <Upload className="w-3 h-3" />
-            Upload music
-          </Button>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="flex flex-col gap-1 pb-4">
+          <div className="px-3 flex flex-col gap-0.5 mb-4">
+            {filteredNotes.map(note => (
+              <button key={note.id}
+                onClick={() => { setActiveNoteId(note.id); if (window.innerWidth < 768) setSidebarOpen(false); }}
+                className={cn(
+                  "w-full text-left px-3 py-2.5 rounded-xl transition-colors",
+                  activeNoteId === note.id
+                    ? "bg-primary/10 text-foreground"
+                    : "text-foreground/70 hover:bg-muted/50 hover:text-foreground"
+                )}>
+                <p className="text-[13px] font-medium line-clamp-1 mb-0.5">{note.title}</p>
+                <p className="text-[11px] font-sans text-muted-foreground">{note.date}</p>
+              </button>
+            ))}
+            {filteredNotes.length === 0 && (
+              <p className="px-3 py-4 text-[13px] font-sans text-muted-foreground/60 text-center">No notes found</p>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="mx-5 border-t border-border/30 mb-4" />
+
+          {/* ── Music section ── */}
+          <div className="px-5 mb-3">
+            <span className="text-[10px] font-sans tracking-[0.15em] uppercase text-muted-foreground/60">Music</span>
+          </div>
+
+          {/* Mini player */}
+          <div className="px-5 mb-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className={cn("w-10 h-10 rounded-lg shrink-0 bg-gradient-to-br flex items-center justify-center relative overflow-hidden",
+                currentSong?.gradient ?? 'from-muted to-muted/40')}>
+                {currentSong?.isUploaded && <Music className="w-4 h-4 text-white/50" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium truncate text-foreground">{currentSong?.title ?? '—'}</p>
+                <p className="text-[11px] font-sans text-muted-foreground truncate">{currentSong?.artist ?? ''}</p>
+              </div>
+            </div>
+
+            <Slider value={[progressPct()]} max={100} step={0.1}
+              className="mb-1 [&_[role=slider]]:h-2.5 [&_[role=slider]]:w-2.5"
+              onValueChange={handleSeek}
+              onPointerDown={() => setIsDragging(true)}
+              onPointerUp={() => setIsDragging(false)} />
+            <div className="flex justify-between text-[10px] font-sans text-muted-foreground mb-3">
+              <span>{displayTime()}</span>
+              <span>{displayDuration()}</span>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center justify-center gap-4">
+              <button onClick={() => setIsShuffle(p => !p)}
+                className={cn("transition-colors", isShuffle ? "text-primary" : "text-muted-foreground hover:text-foreground")}>
+                <Shuffle className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={handlePrev} className="text-foreground/70 hover:text-foreground transition-colors">
+                <SkipBack className="w-4 h-4 fill-current" />
+              </button>
+              <button onClick={handlePlayPause}
+                className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all hover:scale-105 active:scale-95">
+                {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+              </button>
+              <button onClick={handleNext} className="text-foreground/70 hover:text-foreground transition-colors">
+                <SkipForward className="w-4 h-4 fill-current" />
+              </button>
+              <button onClick={() => setIsRepeat(p => !p)}
+                className={cn("transition-colors", isRepeat ? "text-primary" : "text-muted-foreground hover:text-foreground")}>
+                <Repeat className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Playlist */}
+          <div className="px-3 flex flex-col gap-0.5 pb-4">
             {playlist.map((song, idx) => (
               <button key={song.id} onClick={() => handleSelectSong(idx)}
-                className={cn("flex items-center justify-between p-3 rounded-xl transition-colors w-full text-left group",
-                  currentSongIndex === idx ? "bg-white/50 dark:bg-white/10" : "hover:bg-white/30 dark:hover:bg-white/5")}>
-                <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
-                  <div className={cn("w-9 h-9 rounded-md shrink-0 bg-gradient-to-br flex items-center justify-center relative overflow-hidden", song.gradient)}>
-                    {currentSongIndex === idx && isPlaying ? (
-                      <div className="w-3 h-3 flex items-end justify-between gap-0.5">
-                        <div className="w-0.5 bg-white/80 animate-pulse h-full" style={{ animationDelay: '0ms' }} />
-                        <div className="w-0.5 bg-white/80 animate-pulse h-2/3" style={{ animationDelay: '150ms' }} />
-                        <div className="w-0.5 bg-white/80 animate-pulse h-full" style={{ animationDelay: '300ms' }} />
-                      </div>
-                    ) : song.isUploaded ? (
-                      <Music className="w-3.5 h-3.5 text-white/60" />
-                    ) : null}
-                  </div>
-                  <div className="truncate flex-1 min-w-0">
-                    <p className={cn("text-sm font-medium truncate mb-0.5", currentSongIndex === idx ? "text-foreground" : "text-foreground/80 group-hover:text-foreground")}>{song.title}</p>
-                    <p className="text-xs font-sans text-muted-foreground truncate">{song.artist}</p>
-                  </div>
+                className={cn(
+                  "flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl transition-colors group",
+                  currentSongIndex === idx ? "bg-white/50 dark:bg-white/10" : "hover:bg-muted/40"
+                )}>
+                <div className={cn("w-7 h-7 rounded-md shrink-0 bg-gradient-to-br relative overflow-hidden", song.gradient)}>
+                  {currentSongIndex === idx && isPlaying && (
+                    <div className="absolute inset-0 flex items-end justify-center gap-0.5 pb-1">
+                      <div className="w-0.5 bg-white/80 animate-pulse" style={{ height: '8px', animationDelay: '0ms' }} />
+                      <div className="w-0.5 bg-white/80 animate-pulse" style={{ height: '12px', animationDelay: '150ms' }} />
+                      <div className="w-0.5 bg-white/80 animate-pulse" style={{ height: '8px', animationDelay: '300ms' }} />
+                    </div>
+                  )}
+                  {song.isUploaded && !(currentSongIndex === idx && isPlaying) && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Music className="w-3 h-3 text-white/50" />
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 ml-2 shrink-0">
-                  <span className="text-xs font-sans text-muted-foreground">{song.duration}</span>
+                <div className="flex-1 min-w-0">
+                  <p className={cn("text-[13px] font-medium truncate", currentSongIndex === idx ? "text-foreground" : "text-foreground/70 group-hover:text-foreground")}>{song.title}</p>
+                  <p className="text-[11px] font-sans text-muted-foreground truncate">{song.artist}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[11px] font-sans text-muted-foreground">{song.duration}</span>
                   {song.isUploaded && (
                     <button onClick={e => handleRemoveSong(e, song.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded text-muted-foreground hover:text-destructive transition-all ml-1">
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-all ml-0.5">
                       <Trash2 className="w-3 h-3" />
                     </button>
                   )}
                 </div>
               </button>
             ))}
-          </div>
-        </ScrollArea>
-      </div>
-    </div>
-  );
-
-  // ─── Render ──────────────────────────────────────────────────────────────────
-
-  return (
-    <div className="min-h-[100dvh] bg-background text-foreground font-serif selection:bg-primary/20">
-
-      {/* ── DESKTOP (md+) ───────────────────────────────────────────────────── */}
-      <div className="hidden md:flex items-center justify-center p-8 min-h-[100dvh]">
-        <div className="w-full max-w-[1400px] h-[90vh] min-h-[700px] bg-white/40 dark:bg-black/20 backdrop-blur-3xl rounded-[2rem] border border-white/50 dark:border-white/10 shadow-2xl overflow-hidden flex flex-row">
-
-          {/* ── Icon nav rail ── */}
-          <div className="w-16 flex flex-col items-center pt-7 pb-5 border-r border-border/40 bg-card/30 shrink-0">
-            <span className="text-[11px] tracking-[0.2em] text-muted-foreground/40 font-sans uppercase mb-8 select-none">S</span>
-
-            <div className="flex flex-col gap-2 flex-1">
-              <button
-                onClick={() => setActiveSection('notes')}
-                title="Notes"
-                className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150",
-                  activeSection === 'notes'
-                    ? "bg-primary/12 text-primary shadow-sm"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}>
-                <PenLine className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={() => setActiveSection('music')}
-                title="Music"
-                className={cn(
-                  "relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-150",
-                  activeSection === 'music'
-                    ? "bg-primary/12 text-primary shadow-sm"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}>
-                <ListMusic className="w-5 h-5" />
-                {isPlaying && activeSection !== 'music' && (
-                  <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-                )}
-              </button>
-            </div>
-
-            {/* Settings at bottom-left */}
-            <button
-              onClick={() => setSettingsOpen(true)}
-              title="Settings"
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-150">
-              <Settings className="w-4 h-4" />
+            <button onClick={handleUploadClick}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-muted-foreground/70 hover:text-foreground hover:bg-muted/40 transition-colors w-full text-left mt-1">
+              <Upload className="w-3.5 h-3.5" />
+              <span className="text-[13px] font-sans">Upload music</span>
             </button>
           </div>
+        </div>
 
-          {/* ── Content area ── */}
-          {activeSection === 'notes' ? (
-            <>
-              {/* Notes list panel */}
-              <div className="w-72 xl:w-80 border-r border-border/40 flex flex-col shrink-0 bg-secondary/20 h-full">
-                <div className="h-16 flex items-center justify-between px-4 border-b border-border/40 shrink-0 gap-3">
-                  <div className="flex items-center flex-1 relative">
-                    <Search className="w-4 h-4 absolute left-3 text-muted-foreground" />
-                    <Input className="pl-9 h-9 bg-muted/50 border-none rounded-full text-sm font-sans focus-visible:ring-1" placeholder="Search notes..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                  </div>
-                  <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary shrink-0" onClick={handleAddNote}>
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-                <ScrollArea className="flex-1 h-full">
-                  <div className="p-3 flex flex-col gap-2">
-                    {filteredNotes.map(note => (
-                      <button key={note.id} onClick={() => setActiveNoteId(note.id)}
-                        className={cn("w-full text-left p-4 rounded-xl transition-all duration-200 border text-sm",
-                          activeNoteId === note.id ? "bg-white/80 dark:bg-white/5 border-primary/20 shadow-sm" : "bg-transparent border-transparent hover:bg-white/40 dark:hover:bg-white/5")}>
-                        <h3 className="font-semibold text-foreground mb-1 line-clamp-1">{note.title}</h3>
-                        <p className="text-xs text-muted-foreground mb-2 font-sans tracking-wide">{note.date}</p>
-                        <p className="text-muted-foreground line-clamp-2 leading-relaxed text-[13px]">{note.preview || note.content.substring(0, 60)}</p>
-                      </button>
-                    ))}
-                    {filteredNotes.length === 0 && <div className="p-8 text-center text-muted-foreground text-sm font-sans">No notes found.</div>}
-                  </div>
-                </ScrollArea>
-              </div>
+        {/* ── Settings corner ── */}
+        <div className="px-5 py-4 border-t border-border/20 shrink-0">
+          <button onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-2 text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+            <Settings className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-sans tracking-wide">Settings</span>
+          </button>
+        </div>
+      </aside>
 
-              {/* Note editor */}
-              <div className="flex-1 flex flex-col overflow-y-auto h-full bg-card/60">
-                {activeNote ? (
-                  <div className="max-w-2xl mx-auto w-full px-12 pt-14 pb-12 h-full flex flex-col">
-                    <input type="text" value={activeNote.title} onChange={e => updateActiveNote({ title: e.target.value })}
-                      className="w-full text-4xl font-serif font-medium bg-transparent border-none outline-none mb-6 text-foreground placeholder-muted-foreground/50 focus:ring-0"
-                      placeholder="Note Title" />
-                    <p className="text-sm text-muted-foreground font-sans tracking-wide mb-12 flex items-center gap-2">
-                      <PenLine className="w-3 h-3" />{activeNote.date}
-                    </p>
-                    <textarea value={activeNote.content}
-                      onChange={e => updateActiveNote({ content: e.target.value, preview: e.target.value.substring(0, 80) + '...' })}
-                      className={cn(
-                        "w-full flex-1 resize-none bg-transparent border-none outline-none text-foreground/80 placeholder-muted-foreground/30 focus:ring-0",
-                        FONT_SIZE_MAP[fontSize],
-                        LINE_HEIGHT_MAP[lineHeight],
-                        editorFont === 'serif' ? 'font-serif' : 'font-sans'
-                      )}
-                      placeholder="Start writing..." />
-                  </div>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-muted-foreground font-sans text-sm">Select a note or create a new one</div>
-                )}
-              </div>
-            </>
-          ) : (
-            /* Music player — full content area */
-            <div className="flex-1 h-full bg-secondary/30 overflow-y-auto">
-              {MusicPlayer}
+      {/* ── Main content area ── */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-[100dvh]">
+
+        {/* Top bar */}
+        <div className="flex items-center h-14 px-5 border-b border-border/30 shrink-0 bg-background/60 backdrop-blur-xl gap-3">
+          <button onClick={() => setSidebarOpen(p => !p)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0">
+            <Menu className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-sans text-muted-foreground/60 truncate select-none tracking-wide">
+            {activeNote?.title || 'Sanctuary'}
+          </span>
+          {isPlaying && (
+            <div className="ml-auto flex items-center gap-1.5 text-muted-foreground/50 shrink-0">
+              <span className="w-1 h-1 bg-primary rounded-full animate-pulse" />
+              <span className="text-[11px] font-sans truncate max-w-[120px]">{currentSong?.title}</span>
             </div>
           )}
         </div>
-      </div>
 
-      {/* ── MOBILE (< md) ───────────────────────────────────────────────────── */}
-      <div className="flex md:hidden flex-col h-[100dvh]">
-        <div className="flex-1 overflow-hidden bg-card/60">
-          {mobileTab === 'notes' && (mobileView === 'note-editor' ? NoteEditor : NotesList)}
-          {mobileTab === 'player' && (
-            <div className="h-full overflow-y-auto bg-secondary/40">{MusicPlayer}</div>
+        {/* Note editor */}
+        <div className="flex-1 overflow-y-auto">
+          {activeNote ? (
+            <div className="max-w-2xl mx-auto px-8 md:px-16 pt-14 pb-16">
+              <input type="text" value={activeNote.title}
+                onChange={e => updateActiveNote({ title: e.target.value })}
+                className="w-full text-3xl md:text-4xl font-serif font-medium bg-transparent border-none outline-none mb-5 text-foreground placeholder-muted-foreground/40 focus:ring-0"
+                placeholder="Note Title" />
+              <p className="text-sm text-muted-foreground font-sans tracking-wide mb-10 flex items-center gap-2">
+                <PenLine className="w-3 h-3" />{activeNote.date}
+              </p>
+              <textarea value={activeNote.content}
+                onChange={e => updateActiveNote({ content: e.target.value, preview: e.target.value.substring(0, 80) + '...' })}
+                className={cn(
+                  "w-full min-h-[60vh] resize-none bg-transparent border-none outline-none text-foreground/80 placeholder-muted-foreground/30 focus:ring-0",
+                  FONT_SIZE_MAP[fontSize],
+                  LINE_HEIGHT_MAP[lineHeight],
+                  editorFont === 'serif' ? 'font-serif' : 'font-sans'
+                )}
+                placeholder="Start writing..." />
+            </div>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-8">
+              <p className="text-muted-foreground/50 font-sans text-sm">Open the sidebar to select or create a note</p>
+              <button onClick={() => setSidebarOpen(true)}
+                className="text-xs font-sans text-muted-foreground/40 hover:text-muted-foreground transition-colors flex items-center gap-1.5">
+                <Menu className="w-3.5 h-3.5" /> Open sidebar
+              </button>
+            </div>
           )}
-        </div>
-
-        {/* Bottom tab bar — Settings on far left */}
-        <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border/50 flex">
-          <button
-            onClick={() => setSettingsOpen(true)}
-            className="w-16 flex flex-col items-center justify-center py-3 gap-1 text-muted-foreground border-r border-border/30 shrink-0 transition-colors hover:text-foreground">
-            <Settings className="w-5 h-5" />
-            <span className="text-[10px] font-sans tracking-wide">设置</span>
-          </button>
-
-          <button onClick={() => setMobileTab('notes')}
-            className={cn("flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-sans tracking-wide transition-colors",
-              mobileTab === 'notes' ? "text-primary" : "text-muted-foreground")}>
-            <PenLine className="w-5 h-5" />
-            Notes
-          </button>
-
-          <button onClick={() => setMobileTab('player')}
-            className={cn("flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-sans tracking-wide transition-colors relative",
-              mobileTab === 'player' ? "text-primary" : "text-muted-foreground")}>
-            <ListMusic className="w-5 h-5" />
-            Music
-            {isPlaying && mobileTab !== 'player' && (
-              <span className="absolute top-2.5 right-6 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-            )}
-          </button>
         </div>
       </div>
 
