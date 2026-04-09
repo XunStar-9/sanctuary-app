@@ -1,13 +1,74 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX,
-  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2
+  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2, Palette
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+
+// ─── Themes ──────────────────────────────────────────────────────────────────
+
+type ThemeId = 'warm' | 'ink' | 'forest' | 'dusk' | 'stone';
+
+const THEMES: { id: ThemeId; label: string; color: string }[] = [
+  { id: 'warm',   label: '暖沙', color: '#C4937A' },
+  { id: 'ink',    label: '墨白', color: '#4A6080' },
+  { id: 'forest', label: '林间', color: '#4A7A5C' },
+  { id: 'dusk',   label: '暮色', color: '#7A5CA0' },
+  { id: 'stone',  label: '石砚', color: '#555555' },
+];
+
+function ThemePicker({ theme, onChange }: { theme: ThemeId; onChange: (t: ThemeId) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen(p => !p)}
+        className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
+          open ? "bg-muted" : "hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+        )}
+        title="切换主题"
+      >
+        <Palette className="w-4 h-4" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-10 z-50 bg-card border border-border rounded-2xl shadow-lg p-3 flex flex-col gap-2.5 min-w-[120px]">
+          {THEMES.map(t => (
+            <button
+              key={t.id}
+              onClick={() => { onChange(t.id); setOpen(false); }}
+              className={cn(
+                "flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-colors text-sm font-sans w-full text-left",
+                theme === t.id ? "bg-muted" : "hover:bg-muted/60"
+              )}
+            >
+              <span
+                className="w-4 h-4 rounded-full shrink-0 ring-offset-background transition-all"
+                style={{ backgroundColor: t.color, boxShadow: theme === t.id ? `0 0 0 2px ${t.color}55, 0 0 0 3px hsl(var(--background))` : 'none' }}
+              />
+              <span className="text-foreground/80">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -112,6 +173,15 @@ function parseFileMeta(file: File, index: number): Omit<Song, 'durationSecs' | '
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const [theme, setTheme] = useState<ThemeId>(() => {
+    return (localStorage.getItem('sanctuary_theme') as ThemeId) ?? 'warm';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('sanctuary_theme', theme);
+  }, [theme]);
+
   const [notes, setNotes] = useState<Note[]>(() => {
     const saved = localStorage.getItem('sanctuary_notes');
     if (saved) { try { return JSON.parse(saved); } catch { return DEFAULT_NOTES; } }
@@ -329,9 +399,12 @@ export default function Home() {
           <Input className="pl-9 h-9 bg-muted/50 border-none rounded-full text-sm font-sans focus-visible:ring-1" placeholder="Search notes..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
         <span className="text-xs font-sans tracking-widest uppercase text-muted-foreground hidden md:block select-none">Notes</span>
-        <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary shrink-0" onClick={handleAddNote}>
-          <Plus className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary" onClick={handleAddNote}>
+            <Plus className="w-4 h-4" />
+          </Button>
+          <ThemePicker theme={theme} onChange={setTheme} />
+        </div>
       </div>
       <ScrollArea className="flex-1">
         <div className="p-3 md:p-4 flex flex-col gap-2">
@@ -528,9 +601,12 @@ export default function Home() {
                 <Input className="pl-9 h-9 bg-muted/50 border-none rounded-full text-sm font-sans focus-visible:ring-1" placeholder="Search notes..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
               <h1 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Sanctuary</h1>
-              <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary shrink-0" onClick={handleAddNote}>
-                <Plus className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary" onClick={handleAddNote}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+                <ThemePicker theme={theme} onChange={setTheme} />
+              </div>
             </div>
 
             <div className="flex-1 flex overflow-hidden min-h-0">

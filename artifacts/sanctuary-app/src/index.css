@@ -67,6 +67,163 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* ─── THEMES ──────────────────────────────────────────────────────────────── */
+
+/* Theme: 暖沙 Warm Sand (default) */
+[data-theme="warm"] {
+  --background: 40 40% 98%;
+  --foreground: 25 15% 25%;
+  --border: 35 20% 85%;
+  --card: 40 30% 99%;
+  --card-foreground: 25 15% 25%;
+  --card-border: 35 20% 88%;
+  --sidebar: 35 25% 94%;
+  --sidebar-foreground: 25 15% 25%;
+  --sidebar-border: 35 20% 85%;
+  --sidebar-primary: 15 35% 60%;
+  --sidebar-primary-foreground: 40 40% 98%;
+  --sidebar-accent: 35 30% 88%;
+  --sidebar-accent-foreground: 25 15% 25%;
+  --sidebar-ring: 15 35% 60%;
+  --popover: 40 30% 99%;
+  --popover-foreground: 25 15% 25%;
+  --popover-border: 35 20% 85%;
+  --primary: 15 35% 60%;
+  --primary-foreground: 40 40% 98%;
+  --secondary: 35 25% 90%;
+  --secondary-foreground: 25 15% 25%;
+  --muted: 35 25% 90%;
+  --muted-foreground: 25 10% 50%;
+  --accent: 15 35% 60%;
+  --accent-foreground: 40 40% 98%;
+  --input: 35 20% 85%;
+  --ring: 15 35% 60%;
+}
+
+/* Theme: 墨白 Ink (cool minimal) */
+[data-theme="ink"] {
+  --background: 210 20% 98%;
+  --foreground: 215 20% 20%;
+  --border: 215 15% 88%;
+  --card: 210 20% 100%;
+  --card-foreground: 215 20% 20%;
+  --card-border: 215 15% 90%;
+  --sidebar: 215 15% 95%;
+  --sidebar-foreground: 215 20% 20%;
+  --sidebar-border: 215 15% 88%;
+  --sidebar-primary: 215 30% 40%;
+  --sidebar-primary-foreground: 210 20% 98%;
+  --sidebar-accent: 215 15% 90%;
+  --sidebar-accent-foreground: 215 20% 20%;
+  --sidebar-ring: 215 30% 40%;
+  --popover: 210 20% 100%;
+  --popover-foreground: 215 20% 20%;
+  --popover-border: 215 15% 88%;
+  --primary: 215 30% 40%;
+  --primary-foreground: 210 20% 98%;
+  --secondary: 215 15% 92%;
+  --secondary-foreground: 215 20% 20%;
+  --muted: 215 15% 92%;
+  --muted-foreground: 215 10% 50%;
+  --accent: 215 30% 40%;
+  --accent-foreground: 210 20% 98%;
+  --input: 215 15% 88%;
+  --ring: 215 30% 40%;
+}
+
+/* Theme: 林间 Forest (nature green) */
+[data-theme="forest"] {
+  --background: 130 18% 97%;
+  --foreground: 140 20% 18%;
+  --border: 130 15% 85%;
+  --card: 130 15% 99%;
+  --card-foreground: 140 20% 18%;
+  --card-border: 130 15% 88%;
+  --sidebar: 130 18% 93%;
+  --sidebar-foreground: 140 20% 18%;
+  --sidebar-border: 130 15% 85%;
+  --sidebar-primary: 155 28% 38%;
+  --sidebar-primary-foreground: 130 18% 97%;
+  --sidebar-accent: 130 15% 88%;
+  --sidebar-accent-foreground: 140 20% 18%;
+  --sidebar-ring: 155 28% 38%;
+  --popover: 130 15% 99%;
+  --popover-foreground: 140 20% 18%;
+  --popover-border: 130 15% 85%;
+  --primary: 155 28% 38%;
+  --primary-foreground: 130 18% 97%;
+  --secondary: 130 15% 90%;
+  --secondary-foreground: 140 20% 18%;
+  --muted: 130 15% 90%;
+  --muted-foreground: 140 10% 48%;
+  --accent: 155 28% 38%;
+  --accent-foreground: 130 18% 97%;
+  --input: 130 15% 85%;
+  --ring: 155 28% 38%;
+}
+
+/* Theme: 暮色 Dusk (lavender) */
+[data-theme="dusk"] {
+  --background: 265 20% 98%;
+  --foreground: 265 18% 22%;
+  --border: 265 15% 86%;
+  --card: 265 15% 99.5%;
+  --card-foreground: 265 18% 22%;
+  --card-border: 265 15% 89%;
+  --sidebar: 265 18% 94%;
+  --sidebar-foreground: 265 18% 22%;
+  --sidebar-border: 265 15% 86%;
+  --sidebar-primary: 265 25% 52%;
+  --sidebar-primary-foreground: 265 20% 98%;
+  --sidebar-accent: 265 15% 89%;
+  --sidebar-accent-foreground: 265 18% 22%;
+  --sidebar-ring: 265 25% 52%;
+  --popover: 265 15% 99.5%;
+  --popover-foreground: 265 18% 22%;
+  --popover-border: 265 15% 86%;
+  --primary: 265 25% 52%;
+  --primary-foreground: 265 20% 98%;
+  --secondary: 265 15% 91%;
+  --secondary-foreground: 265 18% 22%;
+  --muted: 265 15% 91%;
+  --muted-foreground: 265 10% 50%;
+  --accent: 265 25% 52%;
+  --accent-foreground: 265 20% 98%;
+  --input: 265 15% 86%;
+  --ring: 265 25% 52%;
+}
+
+/* Theme: 石砚 Stone (pure minimal) */
+[data-theme="stone"] {
+  --background: 0 0% 98%;
+  --foreground: 0 0% 15%;
+  --border: 0 0% 88%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 15%;
+  --card-border: 0 0% 90%;
+  --sidebar: 0 0% 94%;
+  --sidebar-foreground: 0 0% 15%;
+  --sidebar-border: 0 0% 88%;
+  --sidebar-primary: 0 0% 25%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 0 0% 90%;
+  --sidebar-accent-foreground: 0 0% 15%;
+  --sidebar-ring: 0 0% 25%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 15%;
+  --popover-border: 0 0% 88%;
+  --primary: 0 0% 25%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 0 0% 92%;
+  --secondary-foreground: 0 0% 15%;
+  --muted: 0 0% 92%;
+  --muted-foreground: 0 0% 48%;
+  --accent: 0 0% 25%;
+  --accent-foreground: 0 0% 98%;
+  --input: 0 0% 88%;
+  --ring: 0 0% 25%;
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
