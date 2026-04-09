@@ -24,10 +24,12 @@ jobs:
           version: 9
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build web assets
         working-directory: artifacts/sanctuary-app
+        env:
+          BASE_PATH: "/"
         run: pnpm run build
 
       - name: Setup Java
@@ -39,7 +41,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Initialize Capacitor Android
+      - name: Install Capacitor CLI
+        working-directory: artifacts/sanctuary-app
+        run: npx cap --version
+
+      - name: Add Android platform
         working-directory: artifacts/sanctuary-app
         run: npx cap add android
 
@@ -47,15 +53,13 @@ jobs:
         working-directory: artifacts/sanctuary-app
         run: npx cap sync android
 
-      - name: Make Gradle executable
-        working-directory: artifacts/sanctuary-app/android
-        run: chmod +x gradlew
-
       - name: Build debug APK
         working-directory: artifacts/sanctuary-app/android
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: sanctuary-debug-apk
