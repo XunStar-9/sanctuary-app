@@ -34,22 +34,19 @@ function SliderRow({ label, effectiveValue, isCustom, min, max, step, display, o
           )}
         </div>
       </div>
-      <div className="relative h-5 flex items-center select-none">
-        {/* Track */}
-        <div className="absolute left-0 right-0 h-[3px] bg-muted rounded-full overflow-hidden">
-          <div className="h-full bg-primary/60 rounded-full" style={{ width: `${pct}%` }} />
+      <div className="relative h-8 flex items-center select-none touch-pan-x">
+        <div className="absolute left-0 right-0 h-[5px] bg-muted rounded-full overflow-hidden">
+          <div className="h-full bg-primary/60 rounded-full transition-[width] duration-75 ease-out" style={{ width: `${pct}%` }} />
         </div>
-        {/* Invisible native range for input handling */}
         <input
           type="range" min={min} max={max} step={step}
           value={effectiveValue}
           onChange={e => onChange(Number(e.target.value))}
-          className="absolute inset-0 w-full opacity-0 cursor-pointer h-5"
+          className="absolute inset-0 w-full opacity-0 cursor-pointer h-8"
         />
-        {/* Visual thumb */}
         <div
-          className="absolute w-4 h-4 rounded-full bg-primary shadow-md border-2 border-background pointer-events-none"
-          style={{ left: `calc(${pct}% - 8px)` }}
+          className="absolute w-5 h-5 rounded-full bg-primary shadow-md border-2 border-background pointer-events-none transition-transform duration-100 ease-out"
+          style={{ left: `calc(${pct}% - 10px)` }}
         />
       </div>
       <div className="flex justify-between mt-1">
@@ -149,7 +146,7 @@ export const TypographyPanel = memo(function TypographyPanel({
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5">
 
           {/* Font size slider */}
           <SliderRow

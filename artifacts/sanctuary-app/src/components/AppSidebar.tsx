@@ -69,7 +69,7 @@ export const AppSidebar = memo(function AppSidebar({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain">
         <div className="px-5 mb-1">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-sans tracking-[0.15em] uppercase text-muted-foreground/60">Notes</span>
@@ -143,7 +143,7 @@ export const AppSidebar = memo(function AppSidebar({
               </div>
 
               <Slider value={[progressPct]} max={100} step={0.1}
-                className="mb-1 [&_[role=slider]]:h-2.5 [&_[role=slider]]:w-2.5"
+                className="mb-1"
                 onValueChange={onSeek}
                 onPointerDown={onDragStart}
                 onPointerUp={onDragEnd} />
@@ -161,7 +161,7 @@ export const AppSidebar = memo(function AppSidebar({
                   <SkipBack className="w-4 h-4 fill-current" />
                 </button>
                 <button onClick={onPlayPause}
-                  className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all hover:scale-105 active:scale-95">
+                  className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all duration-150 hover:scale-105 active:scale-90">
                   {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
                 </button>
                 <button onClick={onNext} className="text-foreground/70 hover:text-foreground transition-colors">
@@ -216,7 +216,7 @@ export const AppSidebar = memo(function AppSidebar({
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-3 pb-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-4">
           {playlist.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3">
               <Music className="w-6 h-6 text-muted-foreground/20" />

@@ -352,7 +352,7 @@ export const BookReader = memo(function BookReader({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto overscroll-contain">
             {panelTab === 'chapters' && (
               <div className="py-2">
                 {book.chapters.map((ch, idx) => (
