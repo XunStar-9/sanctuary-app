@@ -1,3 +1,39 @@
+// ─── Book / Reader types ──────────────────────────────────────────────────────
+
+export type BookFormat = 'txt' | 'epub';
+
+export type BookChapter = {
+  id: string;
+  title: string;
+  content: string;
+};
+
+export type Book = {
+  id: string;
+  title: string;
+  author: string;
+  format: BookFormat;
+  chapters: BookChapter[];
+  addedAt: string;
+};
+
+export type BookMark = {
+  id: string;
+  bookId: string;
+  chapterId: string;
+  position: number;  // 0-100 scroll percentage within chapter
+  label: string;
+  createdAt: string;
+};
+
+export type ReadingProgress = {
+  bookId: string;
+  chapterId: string;
+  position: number;
+};
+
+// ─── App / Settings types ─────────────────────────────────────────────────────
+
 export type ThemeId    = 'warm' | 'ink' | 'forest' | 'dusk' | 'stone';
 export type FontSize   = 'sm' | 'md' | 'lg';
 export type LineHeight = 'tight' | 'normal' | 'relaxed';

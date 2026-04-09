@@ -1,5 +1,5 @@
 import { useRef, memo } from 'react';
-import { X, Plus, Search, Music, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat, Upload, Trash2, Settings } from 'lucide-react';
+import { X, Plus, Search, Music, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat, Upload, Trash2, Settings, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import type { Note, Song } from '@/lib/types';
@@ -8,6 +8,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onOpenSettings: () => void;
+  onOpenLibrary: () => void;
 
   notes: Note[];
   filteredNotes: Note[];
@@ -42,7 +43,7 @@ type Props = {
 };
 
 export const AppSidebar = memo(function AppSidebar({
-  open, onClose, onOpenSettings,
+  open, onClose, onOpenSettings, onOpenLibrary,
   filteredNotes, activeNoteId, searchQuery, onSearchChange, onSelectNote, onAddNote,
   playlist, currentSong, currentSongIndex, isPlaying, isShuffle, isRepeat,
   progressPct, displayTime, displayDuration,
@@ -208,12 +209,17 @@ export const AppSidebar = memo(function AppSidebar({
         </div>
       </div>
 
-      {/* Settings corner */}
-      <div className="px-5 py-4 border-t border-border/20 shrink-0">
+      {/* Bottom corner */}
+      <div className="px-5 py-4 border-t border-border/20 shrink-0 flex items-center justify-between">
         <button onClick={onOpenSettings}
           className="flex items-center gap-2 text-muted-foreground/50 hover:text-muted-foreground transition-colors">
           <Settings className="w-3.5 h-3.5" />
           <span className="text-[11px] font-sans tracking-wide">Settings</span>
+        </button>
+        <button onClick={onOpenLibrary}
+          className="flex items-center gap-2 text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+          <BookOpen className="w-3.5 h-3.5" />
+          <span className="text-[11px] font-sans tracking-wide">Library</span>
         </button>
       </div>
     </aside>

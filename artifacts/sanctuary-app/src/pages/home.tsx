@@ -3,17 +3,21 @@ import { cn } from '@/lib/utils';
 import { useSettings } from '@/hooks/useSettings';
 import { useNotes } from '@/hooks/useNotes';
 import { useAudio } from '@/hooks/useAudio';
+import { useBooks } from '@/hooks/useBooks';
 import { AppSidebar } from '@/components/AppSidebar';
 import { NoteEditor } from '@/components/NoteEditor';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { LibraryView } from '@/components/LibraryView';
 
 export default function Home() {
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [libraryOpen,  setLibraryOpen]  = useState(false);
 
   const settings = useSettings();
   const notes    = useNotes();
   const audio    = useAudio();
+  const books    = useBooks();
 
   const handleSelectNote = useCallback((id: string) => {
     notes.setActiveNoteId(id);
@@ -25,6 +29,13 @@ export default function Home() {
   const closeSidebar  = useCallback(() => setSidebarOpen(false),  []);
   const openSidebar   = useCallback(() => setSidebarOpen(true),   []);
   const toggleSidebar = useCallback(() => setSidebarOpen(p => !p), []);
+  const openLibrary   = useCallback(() => { setLibraryOpen(true); setSidebarOpen(false); }, []);
+  const closeLibrary  = useCallback(() => setLibraryOpen(false), []);
+  const backToShelf   = useCallback(() => books.selectBook(''), [books]);
+
+  const handleSelectBook = useCallback((id: string) => {
+    books.selectBook(id);
+  }, [books]);
 
   return (
     <div className="h-[100dvh] bg-background text-foreground font-serif selection:bg-primary/20 flex overflow-hidden">
@@ -42,6 +53,7 @@ export default function Home() {
         open={sidebarOpen}
         onClose={closeSidebar}
         onOpenSettings={openSettings}
+        onOpenLibrary={openLibrary}
 
         notes={notes.notes}
         filteredNotes={notes.filteredNotes}
@@ -95,6 +107,29 @@ export default function Home() {
         lineHeight={settings.lineHeight} onLineHeight={settings.setLineHeight}
         editorFont={settings.editorFont} onEditorFont={settings.setEditorFont}
       />
+
+      {/* Library / Book Reader — full-screen overlay */}
+      {libraryOpen && (
+        <LibraryView
+          books={books.books}
+          activeBook={books.activeBook}
+          bookmarks={books.bookmarks}
+          progress={books.progress}
+          importing={books.importing}
+          importError={books.importError}
+          fontSize={settings.fontSize}
+          lineHeight={settings.lineHeight}
+          editorFont={settings.editorFont}
+          onImport={books.importBook}
+          onSelectBook={handleSelectBook}
+          onRemoveBook={books.removeBook}
+          onClose={closeLibrary}
+          onBackToShelf={backToShelf}
+          onSaveProgress={books.saveProgress}
+          onAddBookmark={books.addBookmark}
+          onRemoveBookmark={books.removeBookmark}
+        />
+      )}
     </div>
   );
 }
