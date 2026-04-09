@@ -57,9 +57,9 @@ export function useAudio() {
     const onPlay  = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onEnded = () => {
-      // Use refs to avoid stale closures
-      if (isRepeatRef.current) { audio.currentTime = 0; audio.play(); return; }
       const len = playlistRef.current.length;
+      if (!len) return;
+      if (isRepeatRef.current) { audio.currentTime = 0; audio.play(); return; }
       setCurrentSongIndex(prev =>
         isShuffleRef.current ? shuffleNext(prev, len) : (prev + 1) % len
       );
@@ -105,16 +105,17 @@ export function useAudio() {
     else           audio.pause();
   }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const currentSong = playlist[currentSongIndex] ?? playlist[0];
+  const currentSong = playlist[currentSongIndex] ?? playlist[0] ?? undefined;
 
   const handlePlayPause = useCallback(() => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !playlist.length) return;
     if (!playlist[currentSongIndex]?.src) { setIsPlaying(p => !p); return; }
     if (audioRef.current.paused) audioRef.current.play().catch(() => {});
     else                         audioRef.current.pause();
   }, [currentSongIndex, playlist]);
 
   const handleNext = useCallback(() => {
+    if (!playlist.length) return;
     setIsPlaying(true);
     setCurrentSongIndex(p =>
       isShuffle ? shuffleNext(p, playlist.length) : (p + 1) % playlist.length
@@ -122,6 +123,7 @@ export function useAudio() {
   }, [isShuffle, playlist.length, shuffleNext]);
 
   const handlePrev = useCallback(() => {
+    if (!playlist.length) return;
     if (audioRef.current && audioRef.current.currentTime > 3) {
       audioRef.current.currentTime = 0;
       return;
@@ -178,7 +180,8 @@ export function useAudio() {
       if (!next.length) {
         setCurrentSongIndex(0);
         setIsPlaying(false);
-        return DEFAULT_PLAYLIST;
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current.removeAttribute('src'); }
+        return next;
       }
       setCurrentSongIndex(ci => {
         if (removeIdx < ci) return ci - 1;

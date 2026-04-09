@@ -117,9 +117,5 @@ export const DEFAULT_NOTES: Note[] = [
 ];
 
 export const DEFAULT_PLAYLIST: Song[] = [
-  { id: 's1', title: 'Bloom',          artist: 'Gracie Abrams',   duration: '3:42', durationSecs: 222, gradient: 'from-rose-200 to-amber-100' },
-  { id: 's2', title: 'Suitcase',       artist: 'Mt. Wolf',        duration: '4:15', durationSecs: 255, gradient: 'from-slate-300 to-stone-400' },
-  { id: 's3', title: 'Motion Sickness',artist: 'Phoebe Bridgers', duration: '3:34', durationSecs: 214, gradient: 'from-blue-200 to-indigo-300' },
-  { id: 's4', title: 'Ribs',           artist: 'Lorde',           duration: '3:51', durationSecs: 231, gradient: 'from-teal-100 to-emerald-200' },
-  { id: 's5', title: 'Holocene',       artist: 'Bon Iver',        duration: '5:37', durationSecs: 337, gradient: 'from-orange-100 to-yellow-200' },
+  { id: 's1', title: 'Bloom', artist: 'Gracie Abrams', duration: '3:42', durationSecs: 222, gradient: 'from-rose-200 to-amber-100' },
 ];
