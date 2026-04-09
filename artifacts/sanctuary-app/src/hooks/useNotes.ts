@@ -12,9 +12,11 @@ const DATE_FMT = new Intl.DateTimeFormat('en-US', {
   month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric',
 });
 
+const initialNotes = loadNotes();
+
 export function useNotes() {
-  const [notes,        setNotes]        = useState<Note[]>(loadNotes);
-  const [activeNoteId, setActiveNoteId] = useState<string>(() => loadNotes()[0]?.id ?? '');
+  const [notes,        setNotes]        = useState<Note[]>(initialNotes);
+  const [activeNoteId, setActiveNoteId] = useState<string>(initialNotes[0]?.id ?? '');
   const [searchQuery,  setSearchQuery]  = useState('');
 
   useEffect(() => {

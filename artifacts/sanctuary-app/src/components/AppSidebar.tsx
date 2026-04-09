@@ -1,5 +1,5 @@
 import { useState, memo } from 'react';
-import { X, Plus, Search, Music, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat, Upload, Trash2, Settings, BookOpen, ListMusic } from 'lucide-react';
+import { X, Plus, Search, Music, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat, Upload, Settings, BookOpen, ListMusic } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
 import type { Note, Song } from '@/lib/types';

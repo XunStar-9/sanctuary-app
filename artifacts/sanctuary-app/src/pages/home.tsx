@@ -72,9 +72,9 @@ export default function Home() {
         isPlaying={audio.isPlaying}
         isShuffle={audio.isShuffle}
         isRepeat={audio.isRepeat}
-        progressPct={audio.progressPct()}
-        displayTime={audio.displayTime()}
-        displayDuration={audio.displayDuration()}
+        progressPct={audio.progressPct}
+        displayTime={audio.displayTime}
+        displayDuration={audio.displayDuration}
         fileInputRef={audio.fileInputRef}
         onFileChange={audio.handleFileChange}
         onPlayPause={audio.handlePlayPause}
@@ -82,8 +82,8 @@ export default function Home() {
         onPrev={audio.handlePrev}
         onSelectSong={audio.handleSelectSong}
         onSeek={audio.handleSeek}
-        onDragStart={() => audio.setIsDragging(true)}
-        onDragEnd={() => audio.setIsDragging(false)}
+        onDragStart={audio.startDrag}
+        onDragEnd={audio.stopDrag}
         onRemoveSong={audio.handleRemoveSong}
         onUploadClick={audio.handleUploadClick}
         onToggleShuffle={audio.toggleShuffle}

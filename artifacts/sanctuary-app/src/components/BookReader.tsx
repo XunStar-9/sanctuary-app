@@ -346,7 +346,7 @@ export const BookReader = memo(function BookReader({
                     className={cn(
                       "w-full text-left px-4 py-3 transition-colors border-l-2 text-[13px] font-sans",
                       idx === chapterIdx
-                        ? "border-primary bg-primary/8 text-foreground font-medium"
+                        ? "border-primary bg-primary/10 text-foreground font-medium"
                         : "border-transparent text-foreground/60 hover:bg-muted/40 hover:text-foreground"
                     )}>
                     <span className="line-clamp-2 leading-snug">{ch.title}</span>

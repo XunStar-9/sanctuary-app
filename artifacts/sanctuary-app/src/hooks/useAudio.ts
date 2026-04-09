@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Song } from '@/lib/types';
 import { DEFAULT_PLAYLIST, GRADIENTS } from '@/lib/types';
 
@@ -39,19 +39,20 @@ export function useAudio() {
     return n === prev ? (n + 1) % len : n;
   }, []);
 
-  // Use refs for event handler closures so they always see the latest values
-  const isShuffleRef = useRef(isShuffle);
-  const isRepeatRef  = useRef(isRepeat);
-  const playlistRef  = useRef(playlist);
-  useEffect(() => { isShuffleRef.current = isShuffle;  }, [isShuffle]);
-  useEffect(() => { isRepeatRef.current  = isRepeat;   }, [isRepeat]);
-  useEffect(() => { playlistRef.current  = playlist;   }, [playlist]);
+  const isShuffleRef  = useRef(isShuffle);
+  const isRepeatRef   = useRef(isRepeat);
+  const playlistRef   = useRef(playlist);
+  const isDraggingRef = useRef(isDragging);
+  useEffect(() => { isShuffleRef.current  = isShuffle;  }, [isShuffle]);
+  useEffect(() => { isRepeatRef.current   = isRepeat;   }, [isRepeat]);
+  useEffect(() => { playlistRef.current   = playlist;   }, [playlist]);
+  useEffect(() => { isDraggingRef.current = isDragging;  }, [isDragging]);
 
   useEffect(() => {
     const audio = new Audio();
     audioRef.current = audio;
 
-    const onTimeUpdate     = () => { if (!isDragging) setCurrentTime(audio.currentTime); };
+    const onTimeUpdate     = () => { if (!isDraggingRef.current) setCurrentTime(audio.currentTime); };
     const onDurationChange = () => { if (isFinite(audio.duration)) setDuration(audio.duration); };
     const onPlay  = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
@@ -142,13 +143,13 @@ export function useAudio() {
     if (audioRef.current && song?.src) audioRef.current.currentTime = t;
   }, [currentSongIndex, duration]);
 
-  const progressPct = useCallback((): number => {
+  const progressPct = useMemo((): number => {
     const d = currentSong?.src ? duration : (currentSong?.durationSecs ?? 0);
     return d ? (currentTime / d) * 100 : 0;
   }, [currentSong, currentTime, duration]);
 
-  const displayTime     = useCallback(() => secsToString(currentTime), [currentTime]);
-  const displayDuration = useCallback(() => {
+  const displayTime     = useMemo(() => secsToString(currentTime), [currentTime]);
+  const displayDuration = useMemo(() => {
     if (currentSong?.src && duration > 0) return secsToString(duration);
     return currentSong?.duration ?? '0:00';
   }, [currentSong, duration]);
@@ -193,14 +194,16 @@ export function useAudio() {
 
   const toggleShuffle = useCallback(() => setIsShuffle(p => !p), []);
   const toggleRepeat  = useCallback(() => setIsRepeat(p => !p),  []);
+  const startDrag     = useCallback(() => setIsDragging(true),   []);
+  const stopDrag      = useCallback(() => setIsDragging(false),  []);
 
   return {
     playlist, currentSong, currentSongIndex,
-    isPlaying, isShuffle, isRepeat, currentTime, duration, isDragging,
-    audioRef, fileInputRef,
-    setIsDragging,
+    isPlaying, isShuffle, isRepeat,
+    fileInputRef,
+    progressPct, displayTime, displayDuration,
     handlePlayPause, handleNext, handlePrev, handleSelectSong,
-    handleSeek, progressPct, displayTime, displayDuration,
+    handleSeek, startDrag, stopDrag,
     handleUploadClick, handleFileChange, handleRemoveSong,
     toggleShuffle, toggleRepeat,
   };
