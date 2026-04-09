@@ -171,11 +171,24 @@ export function useAudio() {
   const handleRemoveSong = useCallback((e: React.MouseEvent, songId: string) => {
     e.stopPropagation();
     setPlaylist(prev => {
+      const removeIdx = prev.findIndex(s => s.id === songId);
+      if (removeIdx === -1) return prev;
       const next = prev.filter(s => s.id !== songId);
-      return next.length ? next : DEFAULT_PLAYLIST;
+      if (!next.length) {
+        setCurrentSongIndex(0);
+        setIsPlaying(false);
+        return DEFAULT_PLAYLIST;
+      }
+      setCurrentSongIndex(ci => {
+        if (removeIdx < ci) return ci - 1;
+        if (removeIdx === ci) {
+          setIsPlaying(false);
+          return Math.min(ci, next.length - 1);
+        }
+        return ci;
+      });
+      return next;
     });
-    setCurrentSongIndex(0);
-    setIsPlaying(false);
   }, []);
 
   const toggleShuffle = useCallback(() => setIsShuffle(p => !p), []);

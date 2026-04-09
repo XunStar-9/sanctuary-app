@@ -206,9 +206,10 @@ export const AppSidebar = memo(function AppSidebar({
         <div className="flex-1 overflow-y-auto px-3 pb-4">
           <div className="flex flex-col gap-0.5">
             {playlist.map((song, idx) => (
-              <button key={song.id} onClick={() => { onSelectSong(idx); }}
+              <div key={song.id}
+                onClick={() => { onSelectSong(idx); }}
                 className={cn(
-                  "flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl transition-colors group",
+                  "flex items-center gap-2.5 w-full text-left px-3 py-2 rounded-xl transition-colors group cursor-pointer",
                   currentSongIndex === idx ? "bg-primary/10" : "hover:bg-muted/40"
                 )}>
                 <div className={cn("w-7 h-7 rounded-md shrink-0 bg-gradient-to-br relative overflow-hidden", song.gradient)}>
@@ -230,14 +231,12 @@ export const AppSidebar = memo(function AppSidebar({
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-[11px] font-sans text-muted-foreground">{song.duration}</span>
-                  {song.isUploaded && (
-                    <button onClick={e => onRemoveSong(e, song.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-all ml-0.5">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
+                  <button onClick={e => onRemoveSong(e, song.id)}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-muted-foreground hover:text-destructive transition-all ml-0.5">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </div>
