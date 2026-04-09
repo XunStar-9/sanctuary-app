@@ -136,7 +136,7 @@ export const NoteEditor = memo(function NoteEditor({
       {/* Top bar */}
       <div className="flex items-center h-14 px-5 border-b border-border/30 shrink-0 bg-background/60 backdrop-blur-xl gap-3">
         <button onClick={onToggleSidebar}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0">
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-150 active:scale-90 shrink-0">
           <Menu className="w-4 h-4" />
         </button>
         <span className="text-sm font-sans text-muted-foreground/60 truncate select-none tracking-wide">
@@ -187,7 +187,7 @@ export const NoteEditor = memo(function NoteEditor({
           <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-8">
             <p className="text-muted-foreground/50 font-sans text-sm">Open the sidebar to select or create a note</p>
             <button onClick={onOpenSidebar}
-              className="text-xs font-sans text-muted-foreground/40 hover:text-muted-foreground transition-colors flex items-center gap-1.5">
+              className="text-xs font-sans text-muted-foreground/40 hover:text-muted-foreground transition-all duration-150 active:scale-95 flex items-center gap-1.5">
               <Menu className="w-3.5 h-3.5" /> Open sidebar
             </button>
           </div>

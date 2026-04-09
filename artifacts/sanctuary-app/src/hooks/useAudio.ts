@@ -33,6 +33,7 @@ export function useAudio() {
   const [currentTime,       setCurrentTime]       = useState(0);
   const [duration,          setDuration]          = useState(0);
   const [isDragging,        setIsDragging]        = useState(false);
+  const [volume,            setVolume]            = useState(1);
 
   const audioRef    = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -50,7 +51,7 @@ export function useAudio() {
   const durationRef = useRef(duration);
   const isPlayingRef = useRef(isPlaying);
   const retryCountRef = useRef(0);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   isShuffleRef.current  = isShuffle;
   isRepeatRef.current   = isRepeat;
   playlistRef.current   = playlist;
@@ -82,6 +83,7 @@ export function useAudio() {
   useEffect(() => {
     const audio = new Audio();
     audio.preload = 'auto';
+    audio.volume = volume;
     audioRef.current = audio;
 
     let lastReportedTime = 0;
@@ -227,6 +229,26 @@ export function useAudio() {
     setIsPlaying(true);
   }, []);
 
+  const prevVolumeRef = useRef(1);
+  const handleVolume = useCallback((val: number[]) => {
+    const v = val[0] / 100;
+    if (v > 0) prevVolumeRef.current = v;
+    setVolume(v);
+    if (audioRef.current) audioRef.current.volume = v;
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    if (volume > 0) {
+      prevVolumeRef.current = volume;
+      setVolume(0);
+      if (audioRef.current) audioRef.current.volume = 0;
+    } else {
+      const restored = prevVolumeRef.current || 1;
+      setVolume(restored);
+      if (audioRef.current) audioRef.current.volume = restored;
+    }
+  }, [volume]);
+
   const handleSeek = useCallback((val: number[]) => {
     const song = playlistRef.current[currentSongIndexRef.current];
     const d = song?.src ? (audioRef.current?.duration ?? durationRef.current) : durationRef.current;
@@ -294,11 +316,11 @@ export function useAudio() {
 
   return {
     playlist, currentSong, currentSongIndex,
-    isPlaying, isShuffle, isRepeat,
+    isPlaying, isShuffle, isRepeat, volume,
     fileInputRef,
     progressPct, displayTime, displayDuration,
     handlePlayPause, handleNext, handlePrev, handleSelectSong,
-    handleSeek, startDrag, stopDrag,
+    handleSeek, handleVolume, toggleMute, startDrag, stopDrag,
     handleUploadClick, handleFileChange, handleRemoveSong,
     toggleShuffle, toggleRepeat,
   };

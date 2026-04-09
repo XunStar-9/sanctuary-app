@@ -31,7 +31,7 @@ function OptionBtn({ label, active, onClick }: { label: string; active: boolean;
   return (
     <button onClick={onClick}
       className={cn(
-        "flex-1 py-2 rounded-xl text-sm font-sans transition-all duration-150 border",
+        "flex-1 py-2 rounded-xl text-sm font-sans transition-all duration-150 border active:scale-95",
         active
           ? "bg-primary text-primary-foreground border-transparent shadow-sm"
           : "bg-muted/50 text-foreground/70 border-transparent hover:bg-muted hover:text-foreground"

@@ -21,9 +21,9 @@ function ToolBtn({
       onMouseDown={e => { e.preventDefault(); onClick(); }}
       title={title}
       className={`
-        px-2.5 py-1.5 text-sm rounded-lg transition-colors select-none
+        px-3 py-2 text-sm rounded-lg transition-all duration-150 select-none active:scale-90
         ${active
-          ? 'bg-primary text-primary-foreground'
+          ? 'bg-primary text-primary-foreground shadow-sm'
           : 'text-foreground/80 hover:bg-muted/60 hover:text-foreground'}
       `}
     >

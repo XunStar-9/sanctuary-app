@@ -58,9 +58,21 @@ export function useNotes() {
     ));
   }, [activeNoteId]);
 
+  const handleDeleteNote = useCallback((id: string) => {
+    setNotes(prev => {
+      const next = prev.filter(n => n.id !== id);
+      if (id === activeNoteId) {
+        const idx = prev.findIndex(n => n.id === id);
+        const newActive = next[Math.min(idx, next.length - 1)]?.id ?? '';
+        setActiveNoteId(newActive);
+      }
+      return next;
+    });
+  }, [activeNoteId]);
+
   return {
     notes, activeNote, activeNoteId, setActiveNoteId,
     searchQuery, setSearchQuery,
-    filteredNotes, handleAddNote, updateActiveNote,
+    filteredNotes, handleAddNote, updateActiveNote, handleDeleteNote,
   };
 }

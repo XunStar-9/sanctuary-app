@@ -74,6 +74,7 @@ export default function Home() {
         onSearchChange={notes.setSearchQuery}
         onSelectNote={handleSelectNote}
         onAddNote={notes.handleAddNote}
+        onDeleteNote={notes.handleDeleteNote}
 
         playlist={audio.playlist}
         currentSong={audio.currentSong}
@@ -81,6 +82,7 @@ export default function Home() {
         isPlaying={audio.isPlaying}
         isShuffle={audio.isShuffle}
         isRepeat={audio.isRepeat}
+        volume={audio.volume}
         progressPct={audio.progressPct}
         displayTime={audio.displayTime}
         displayDuration={audio.displayDuration}
@@ -91,6 +93,8 @@ export default function Home() {
         onPrev={audio.handlePrev}
         onSelectSong={audio.handleSelectSong}
         onSeek={audio.handleSeek}
+        onVolume={audio.handleVolume}
+        onToggleMute={audio.toggleMute}
         onDragStart={audio.startDrag}
         onDragEnd={audio.stopDrag}
         onRemoveSong={audio.handleRemoveSong}
