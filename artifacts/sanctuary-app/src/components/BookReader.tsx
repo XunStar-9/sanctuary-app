@@ -20,8 +20,13 @@ type Props = {
   onRemoveBookmark: (id: string) => void;
 };
 
-function ContentParagraphs({ content, fontSize, lineHeight, editorFont }: {
+function normalizeForCompare(s: string): string {
+  return s.replace(/[\s\u3000·\-—–:：.。,，、]+/g, '').toLowerCase();
+}
+
+function ContentParagraphs({ content, chapterTitle, fontSize, lineHeight, editorFont }: {
   content: string;
+  chapterTitle: string;
   fontSize: FontSize;
   lineHeight: LineHeight;
   editorFont: EditorFont;
@@ -29,13 +34,16 @@ function ContentParagraphs({ content, fontSize, lineHeight, editorFont }: {
   const paragraphs = useMemo(() => {
     const blocks = content.split(/\n{2,}/);
     const result: string[] = [];
+    const titleNorm = normalizeForCompare(chapterTitle);
     for (const block of blocks) {
       const trimmed = block.trim();
       if (!trimmed) continue;
+      const paraNorm = normalizeForCompare(trimmed);
+      if (result.length === 0 && titleNorm && (paraNorm === titleNorm || titleNorm.includes(paraNorm) || paraNorm.includes(titleNorm))) continue;
       result.push(trimmed);
     }
     return result;
-  }, [content]);
+  }, [content, chapterTitle]);
 
   const baseClass = cn(
     FONT_SIZE_MAP[fontSize],
@@ -47,8 +55,8 @@ function ContentParagraphs({ content, fontSize, lineHeight, editorFont }: {
   return (
     <div className={baseClass}>
       {paragraphs.map((para, i) => {
-        const isHeading = para.length <= 40 && !para.includes('\n') && i > 0;
-        if (isHeading) {
+        const isSubHeading = para.length <= 40 && !para.includes('\n') && i > 0;
+        if (isSubHeading) {
           return (
             <p key={i} className="text-center font-medium text-foreground mt-10 mb-6 tracking-wide">
               {para}
@@ -224,16 +232,21 @@ export const BookReader = memo(function BookReader({
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto overscroll-none pt-16 pb-28"
       >
-        <div className="max-w-[680px] mx-auto px-5 md:px-12 py-6">
-          <h2 className={cn(
-            "font-serif font-semibold text-foreground text-center mb-12 leading-snug tracking-wide",
-            fontSize === 'lg' ? 'text-2xl' : 'text-xl'
-          )}>
-            {chapter.title}
-          </h2>
+        <div className="max-w-[680px] mx-auto px-6 md:px-14 py-8">
+          <div className="flex flex-col items-center mb-14 mt-4">
+            <div className="w-8 h-[1px] bg-primary/25 mb-6" />
+            <h2 className={cn(
+              "font-serif font-semibold text-foreground text-center leading-snug tracking-wider",
+              fontSize === 'lg' ? 'text-2xl' : 'text-xl'
+            )}>
+              {chapter.title}
+            </h2>
+            <div className="w-8 h-[1px] bg-primary/25 mt-6" />
+          </div>
 
           <ContentParagraphs
             content={chapter.content}
+            chapterTitle={chapter.title}
             fontSize={fontSize}
             lineHeight={lineHeight}
             editorFont={editorFont}
