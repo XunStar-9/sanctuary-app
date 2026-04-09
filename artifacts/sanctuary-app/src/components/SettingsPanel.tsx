@@ -93,7 +93,7 @@ export const SettingsPanel = memo(function SettingsPanel({ open, onClose, onOpen
                 {THEMES.map(t => (
                   <button key={t.id} onClick={() => onTheme(t.id)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-sm font-sans w-full text-left",
+                      "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 active:scale-[0.97] text-sm font-sans w-full text-left",
                       theme === t.id ? "bg-muted" : "hover:bg-muted/60"
                     )}>
                     <span className="w-5 h-5 rounded-full shrink-0" style={{
@@ -111,7 +111,7 @@ export const SettingsPanel = memo(function SettingsPanel({ open, onClose, onOpen
               title="字号大小"
               action={
                 <button onClick={onOpenTypography}
-                  className="text-[10px] font-sans text-primary/70 hover:text-primary transition-colors">
+                  className="text-[10px] font-sans text-primary/70 hover:text-primary transition-all duration-150 active:scale-95">
                   精细调节 →
                 </button>
               }
@@ -127,7 +127,7 @@ export const SettingsPanel = memo(function SettingsPanel({ open, onClose, onOpen
               title="行间距"
               action={
                 <button onClick={onOpenTypography}
-                  className="text-[10px] font-sans text-primary/70 hover:text-primary transition-colors">
+                  className="text-[10px] font-sans text-primary/70 hover:text-primary transition-all duration-150 active:scale-95">
                   精细调节 →
                 </button>
               }
@@ -144,7 +144,7 @@ export const SettingsPanel = memo(function SettingsPanel({ open, onClose, onOpen
                 {(['serif', 'sans'] as EditorFont[]).map(f => (
                   <button key={f} onClick={() => onEditorFont(f)}
                     className={cn(
-                      "flex-1 py-3 rounded-xl text-sm border transition-all duration-150",
+                      "flex-1 py-3 rounded-xl text-sm border transition-all duration-150 active:scale-95",
                       editorFont === f
                         ? "bg-primary text-primary-foreground border-transparent shadow-sm"
                         : "bg-muted/50 text-foreground/70 border-transparent hover:bg-muted"

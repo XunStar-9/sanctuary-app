@@ -16,9 +16,7 @@ export function useNotes() {
   const [notes,        setNotes]        = useState<Note[]>(loadNotes);
   const [activeNoteId, setActiveNoteId] = useState<string>(() => {
     const saved = localStorage.getItem('sanctuary_active_note');
-    if (saved) return saved;
-    const loaded = loadNotes();
-    return loaded[0]?.id ?? '';
+    return saved || '';
   });
   const [searchQuery,  setSearchQuery]  = useState('');
 

@@ -215,7 +215,7 @@ export const BookReader = memo(function BookReader({
         toolbarVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
       )}>
         <button onClick={e => { e.stopPropagation(); onBack(); }}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0 pointer-events-auto">
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0 px-1 pointer-events-auto">
@@ -226,14 +226,14 @@ export const BookReader = memo(function BookReader({
           onClick={e => { e.stopPropagation(); handleAddBookmark(); }}
           title={isBookmarked ? '已添加书签' : '添加书签'}
           className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 pointer-events-auto",
+            "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto",
             isBookmarked ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
           )}>
           {isBookmarked ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
         </button>
         <button onClick={e => { e.stopPropagation(); setPanelOpen(p => !p); showToolbar(); }}
           className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 pointer-events-auto",
+            "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto",
             panelOpen ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
           )}>
           <List className="w-4 h-4" />
@@ -302,7 +302,7 @@ export const BookReader = memo(function BookReader({
         <div className="flex items-center justify-between pointer-events-auto">
           <button onClick={e => { e.stopPropagation(); handlePrevChapter(); }}
             disabled={chapterIdx === 0}
-            className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30">
+            className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95 disabled:opacity-30">
             <ChevronLeft className="w-3.5 h-3.5" /> 上一章
           </button>
           <span className="text-[11px] font-sans text-muted-foreground/50">
@@ -311,7 +311,7 @@ export const BookReader = memo(function BookReader({
           </span>
           <button onClick={e => { e.stopPropagation(); handleNextChapter(); }}
             disabled={chapterIdx === totalChapters - 1}
-            className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30">
+            className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95 disabled:opacity-30">
             下一章 <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -339,7 +339,7 @@ export const BookReader = memo(function BookReader({
               {(['chapters', 'bookmarks'] as const).map(tab => (
                 <button key={tab} onClick={() => setPanelTab(tab)}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg text-[13px] font-sans transition-all duration-150",
+                    "px-3 py-1.5 rounded-lg text-[13px] font-sans transition-all duration-150 active:scale-95",
                     panelTab === tab ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                   )}>
                   {tab === 'chapters' ? '目录' : `书签${bookmarks.length ? ` (${bookmarks.length})` : ''}`}
@@ -347,7 +347,7 @@ export const BookReader = memo(function BookReader({
               ))}
             </div>
             <button onClick={() => setPanelOpen(false)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shrink-0">
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-150 active:scale-90 shrink-0">
               <X className="w-4 h-4" />
             </button>
           </div>

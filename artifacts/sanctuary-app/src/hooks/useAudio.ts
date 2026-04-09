@@ -58,8 +58,9 @@ export function useAudio() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const shuffleNext = useCallback((prev: number, len: number) => {
-    const n = Math.floor(Math.random() * len);
-    return n === prev ? (n + 1) % len : n;
+    if (len <= 1) return 0;
+    const n = Math.floor(Math.random() * (len - 1));
+    return n >= prev ? n + 1 : n;
   }, []);
 
   const isShuffleRef  = useRef(isShuffle);
@@ -68,16 +69,15 @@ export function useAudio() {
   const isDraggingRef = useRef(isDragging);
   const currentSongIndexRef = useRef(currentSongIndex);
   const durationRef = useRef(duration);
-  const isPlayingRef = useRef(isPlaying);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wantPlayRef = useRef(false);
   isShuffleRef.current  = isShuffle;
   isRepeatRef.current   = isRepeat;
   playlistRef.current   = playlist;
   isDraggingRef.current = isDragging;
   currentSongIndexRef.current = currentSongIndex;
   durationRef.current   = duration;
-  isPlayingRef.current  = isPlaying;
 
   const rafId = useRef(0);
 
@@ -122,11 +122,11 @@ export function useAudio() {
       p.catch((err) => {
         if (err.name === 'AbortError') return;
         if (err.name === 'NotAllowedError') return;
-        if (retryCountRef.current < MAX_RETRY && isPlayingRef.current) {
+        if (retryCountRef.current < MAX_RETRY && wantPlayRef.current) {
           retryCountRef.current += 1;
           clearTimer(retryTimerRef);
           retryTimerRef.current = setTimeout(() => {
-            if (!audioRef.current || !isPlayingRef.current) return;
+            if (!audioRef.current || !wantPlayRef.current) return;
             safePlay(audioRef.current);
           }, RETRY_DELAY * retryCountRef.current);
         }
@@ -151,26 +151,45 @@ export function useAudio() {
         setCurrentTime(t);
       });
     };
-    const onDurationChange = () => { if (isFinite(audio.duration)) setDuration(audio.duration); };
+    const onDurationChange = () => {
+      if (!isFinite(audio.duration)) return;
+      const d = audio.duration;
+      setDuration(d);
+      const idx = currentSongIndexRef.current;
+      const song = playlistRef.current[idx];
+      if (song && (song.durationSecs === 0 || song.duration === '--:--')) {
+        setPlaylist(prev => prev.map((s, i) =>
+          i === idx ? { ...s, durationSecs: d, duration: secsToString(d) } : s
+        ));
+      }
+    };
     const onPlay  = () => { retryCountRef.current = 0; setIsPlaying(true); };
-    const onPause = () => setIsPlaying(false);
+    const onPause = () => {
+      if (!wantPlayRef.current) setIsPlaying(false);
+    };
     const onEnded = () => {
       const len = playlistRef.current.length;
       if (!len) return;
-      if (isRepeatRef.current) { audio.currentTime = 0; safePlay(audio); return; }
+      if (isRepeatRef.current) {
+        audio.currentTime = 0;
+        safePlay(audio);
+        return;
+      }
+      wantPlayRef.current = true;
+      setIsPlaying(true);
       setCurrentSongIndex(prev =>
         isShuffleRef.current ? shuffleNext(prev, len) : (prev + 1) % len
       );
     };
 
     const onError = () => {
-      if (!isPlayingRef.current) return;
+      if (!wantPlayRef.current) return;
       if (retryCountRef.current < MAX_RETRY) {
         retryCountRef.current += 1;
         const savedTime = audio.currentTime;
         clearTimer(retryTimerRef);
         retryTimerRef.current = setTimeout(() => {
-          if (!audioRef.current || !isPlayingRef.current) return;
+          if (!audioRef.current || !wantPlayRef.current) return;
           const src = audioRef.current.src;
           if (!src) return;
           audioRef.current.src = src;
@@ -181,10 +200,10 @@ export function useAudio() {
     };
 
     const onStalled = () => {
-      if (!isPlayingRef.current) return;
+      if (!wantPlayRef.current) return;
       clearTimer(retryTimerRef);
       retryTimerRef.current = setTimeout(() => {
-        if (!audioRef.current || !isPlayingRef.current) return;
+        if (!audioRef.current || !wantPlayRef.current) return;
         if (audioRef.current.paused) safePlay(audioRef.current);
       }, 2000);
     };
@@ -192,7 +211,7 @@ export function useAudio() {
     const onWaiting = () => {
       clearTimer(retryTimerRef);
       retryTimerRef.current = setTimeout(() => {
-        if (!audioRef.current || !isPlayingRef.current) return;
+        if (!audioRef.current || !wantPlayRef.current) return;
         if (audioRef.current.paused) safePlay(audioRef.current);
       }, 3000);
     };
@@ -232,16 +251,19 @@ export function useAudio() {
       audio.src = song.src;
       audio.load();
       setCurrentTime(0);
-      setDuration(0);
-      if (isPlaying) safePlay(audio);
+      setDuration(song.durationSecs ?? 0);
+      if (wantPlayRef.current) safePlay(audio);
     } else {
       audio.removeAttribute('src');
       setCurrentTime(0);
       setDuration(song?.durationSecs ?? 0);
+      wantPlayRef.current = false;
+      setIsPlaying(false);
     }
-  }, [currentSongIndex, playlist]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentSongIndex, playlist, safePlay]);
 
   useEffect(() => {
+    wantPlayRef.current = isPlaying;
     const audio = audioRef.current;
     if (!audio || !playlist[currentSongIndex]?.src) return;
     if (isPlaying) safePlay(audio);
@@ -255,13 +277,23 @@ export function useAudio() {
 
   const handlePlayPause = useCallback(() => {
     if (!audioRef.current || !playlistRef.current.length) return;
-    if (!playlistRef.current[currentSongIndexRef.current]?.src) { setIsPlaying(p => !p); return; }
-    if (audioRef.current.paused) safePlay(audioRef.current);
-    else                         audioRef.current.pause();
+    const song = playlistRef.current[currentSongIndexRef.current];
+    if (!song?.src) {
+      setIsPlaying(p => !p);
+      return;
+    }
+    if (audioRef.current.paused) {
+      wantPlayRef.current = true;
+      safePlay(audioRef.current);
+    } else {
+      wantPlayRef.current = false;
+      audioRef.current.pause();
+    }
   }, [safePlay]);
 
   const handleNext = useCallback(() => {
     if (!playlist.length) return;
+    wantPlayRef.current = true;
     setIsPlaying(true);
     setCurrentSongIndex(p =>
       isShuffle ? shuffleNext(p, playlist.length) : (p + 1) % playlist.length
@@ -274,11 +306,13 @@ export function useAudio() {
       audioRef.current.currentTime = 0;
       return;
     }
+    wantPlayRef.current = true;
     setIsPlaying(true);
     setCurrentSongIndex(p => p === 0 ? playlist.length - 1 : p - 1);
   }, [playlist.length]);
 
   const handleSelectSong = useCallback((idx: number) => {
+    wantPlayRef.current = true;
     setCurrentSongIndex(idx);
     setIsPlaying(true);
   }, []);
@@ -331,6 +365,7 @@ export function useAudio() {
     for (let i = 0; i < files.length; i++) {
       saveAudioFile(newSongs[i].id, files[i]).catch(() => {});
     }
+    wantPlayRef.current = true;
     setPlaylist(prev => {
       const next = [...prev, ...newSongs];
       setCurrentSongIndex(prev.length);
@@ -353,6 +388,7 @@ export function useAudio() {
       const next = prev.filter(s => s.id !== songId);
       if (!next.length) {
         setCurrentSongIndex(0);
+        wantPlayRef.current = false;
         setIsPlaying(false);
         if (audioRef.current) { audioRef.current.pause(); audioRef.current.removeAttribute('src'); }
         return next;
@@ -360,6 +396,7 @@ export function useAudio() {
       setCurrentSongIndex(ci => {
         if (removeIdx < ci) return ci - 1;
         if (removeIdx === ci) {
+          wantPlayRef.current = false;
           setIsPlaying(false);
           return Math.min(ci, next.length - 1);
         }

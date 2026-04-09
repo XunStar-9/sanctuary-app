@@ -73,14 +73,14 @@ export const LibraryView = memo(function LibraryView({
       {/* Header */}
       <div className="flex items-center gap-3 px-5 h-14 border-b border-border/30 bg-background/80 backdrop-blur-xl shrink-0">
         <button onClick={onClose}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-150 active:scale-90">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <span className="text-sm font-sans text-muted-foreground/70 tracking-wide select-none">Library</span>
         <div className="ml-auto">
           <button onClick={() => fileInputRef.current?.click()}
             disabled={importing}
-            className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-[13px] font-sans disabled:opacity-50">
+            className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-all duration-150 active:scale-95 text-[13px] font-sans disabled:opacity-50">
             <Upload className="w-3.5 h-3.5" />
             {importing ? 'Importing…' : 'Import'}
           </button>
@@ -107,7 +107,7 @@ export const LibraryView = memo(function LibraryView({
               <p className="text-muted-foreground/50 font-sans text-[13px]">Import a .txt or .epub file to start reading</p>
             </div>
             <button onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-sans">
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-all duration-150 active:scale-95 text-sm font-sans">
               <Upload className="w-4 h-4" />
               Import a book
             </button>
@@ -149,7 +149,7 @@ export const LibraryView = memo(function LibraryView({
                       </p>
                     </button>
                     <button onClick={e => { e.stopPropagation(); onRemoveBook(book.id); }}
-                      className="absolute top-2 left-2 w-7 h-7 rounded-lg bg-background/80 backdrop-blur-sm border border-border/30 flex items-center justify-center text-muted-foreground/60 hover:text-destructive hover:bg-background/95 transition-all shadow-sm">
+                      className="absolute top-2 left-2 w-7 h-7 rounded-lg bg-background/80 backdrop-blur-sm border border-border/30 flex items-center justify-center text-muted-foreground/60 hover:text-destructive hover:bg-background/95 transition-all duration-150 active:scale-90 shadow-sm">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
