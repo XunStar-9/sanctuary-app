@@ -124,8 +124,8 @@ export const NoteEditor = memo(function NoteEditor({
   if (lineHeightNum > 0) typoStyle.lineHeight  = lineHeightNum;
 
   const typoClass = cn(
-    "w-full min-h-[60vh] resize-none bg-transparent border-none outline-none",
-    "text-foreground/80 placeholder-muted-foreground/30 focus:ring-0",
+    "w-full min-h-[60vh] resize-none bg-transparent border-none outline-none focus:ring-0",
+    "text-foreground/80 placeholder-muted-foreground/30",
     fontSizeNum   === 0 ? FONT_SIZE_MAP[fontSize]    : '',
     lineHeightNum === 0 ? LINE_HEIGHT_MAP[lineHeight] : '',
     editorFont === 'serif' ? 'font-serif' : 'font-sans'
