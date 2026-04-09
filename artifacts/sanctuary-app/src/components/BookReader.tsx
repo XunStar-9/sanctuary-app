@@ -93,12 +93,17 @@ export const BookReader = memo(function BookReader({
   const contentRef    = useRef<HTMLDivElement>(null);
   const hideTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollPctRef  = useRef(scrollPct);
+  scrollPctRef.current = scrollPct;
 
   const chapter       = book.chapters[chapterIdx];
   const totalChapters = book.chapters.length;
 
-  const isBookmarked = bookmarks.some(
-    b => b.bookId === book.id && b.chapterId === chapter?.id && Math.abs(b.position - scrollPct) < 3
+  const isBookmarked = useMemo(
+    () => bookmarks.some(
+      b => b.bookId === book.id && b.chapterId === chapter?.id && Math.abs(b.position - scrollPct) < 3
+    ),
+    [bookmarks, book.id, chapter?.id, scrollPct],
   );
 
   const showToolbar = useCallback(() => {
@@ -129,6 +134,7 @@ export const BookReader = memo(function BookReader({
     }
   }, [chapterIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const chapterId = chapter?.id;
   const handleScroll = useCallback(() => {
     const el = contentRef.current;
     if (!el) return;
@@ -138,9 +144,9 @@ export const BookReader = memo(function BookReader({
     setScrollPct(pct);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      if (chapter) onSaveProgress(book.id, chapter.id, pct);
+      if (chapterId) onSaveProgress(book.id, chapterId, pct);
     }, 300);
-  }, [book.id, chapter, onSaveProgress]);
+  }, [book.id, chapterId, onSaveProgress]);
 
   const handleContentClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as Element).closest('[data-panel]')) return;
@@ -179,9 +185,10 @@ export const BookReader = memo(function BookReader({
 
   const handleAddBookmark = useCallback(() => {
     if (!chapter) return;
-    const label = `${chapter.title} · ${Math.round(scrollPct)}%`;
-    onAddBookmark(book.id, chapter.id, scrollPct, label);
-  }, [book.id, chapter, scrollPct, onAddBookmark]);
+    const pct = scrollPctRef.current;
+    const label = `${chapter.title} · ${Math.round(pct)}%`;
+    onAddBookmark(book.id, chapter.id, pct, label);
+  }, [book.id, chapter, onAddBookmark]);
 
   const handleJumpBookmark = useCallback((bm: BookMark) => {
     const idx = book.chapters.findIndex(c => c.id === bm.chapterId);

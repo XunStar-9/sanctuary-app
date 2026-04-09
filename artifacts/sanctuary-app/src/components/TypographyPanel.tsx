@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { EditorFont } from '@/lib/types';
@@ -97,7 +97,7 @@ type Props = {
   onFormattingEnabled: (v: boolean) => void;
 };
 
-export function TypographyPanel({
+export const TypographyPanel = memo(function TypographyPanel({
   open, onClose,
   editorFont, onEditorFont,
   fontSizeNum, onFontSizeNum,
@@ -228,4 +228,4 @@ export function TypographyPanel({
       </div>
     </>
   );
-}
+});

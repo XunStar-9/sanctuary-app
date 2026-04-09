@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { X, Type } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -41,7 +41,7 @@ function OptionBtn({ label, active, onClick }: { label: string; active: boolean;
   );
 }
 
-export function SettingsPanel({ open, onClose, onOpenTypography, theme, onTheme, fontSize, onFontSize, lineHeight, onLineHeight, editorFont, onEditorFont }: Props) {
+export const SettingsPanel = memo(function SettingsPanel({ open, onClose, onOpenTypography, theme, onTheme, fontSize, onFontSize, lineHeight, onLineHeight, editorFont, onEditorFont }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -165,4 +165,4 @@ export function SettingsPanel({ open, onClose, onOpenTypography, theme, onTheme,
       </div>
     </>
   );
-}
+});

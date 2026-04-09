@@ -1,4 +1,4 @@
-import { useState, useCallback, lazy, Suspense } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { cn } from '@/lib/utils';
 import { useSettings } from '@/hooks/useSettings';
 import { useNotes } from '@/hooks/useNotes';
@@ -44,6 +44,11 @@ export default function Home() {
   const handleSelectBook = useCallback((id: string) => {
     selectBook(id);
   }, [selectBook]);
+
+  const [settingsMounted, setSettingsMounted] = useState(false);
+  const [typographyMounted, setTypographyMounted] = useState(false);
+  useEffect(() => { if (settingsOpen) setSettingsMounted(true); }, [settingsOpen]);
+  useEffect(() => { if (typographyOpen) setTypographyMounted(true); }, [typographyOpen]);
 
   return (
     <div className="h-[100dvh] bg-background text-foreground font-serif selection:bg-primary/20 flex overflow-hidden">
@@ -110,7 +115,7 @@ export default function Home() {
       />
 
       <Suspense fallback={null}>
-        {settingsOpen && (
+        {settingsMounted && (
           <SettingsPanel
             open={settingsOpen}
             onClose={closeSettings}
@@ -121,7 +126,7 @@ export default function Home() {
             editorFont={settings.editorFont} onEditorFont={settings.setEditorFont}
           />
         )}
-        {typographyOpen && (
+        {typographyMounted && (
           <TypographyPanel
             open={typographyOpen}
             onClose={closeTypography}

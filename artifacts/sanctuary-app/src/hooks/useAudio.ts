@@ -43,10 +43,14 @@ export function useAudio() {
   const isRepeatRef   = useRef(isRepeat);
   const playlistRef   = useRef(playlist);
   const isDraggingRef = useRef(isDragging);
-  useEffect(() => { isShuffleRef.current  = isShuffle;  }, [isShuffle]);
-  useEffect(() => { isRepeatRef.current   = isRepeat;   }, [isRepeat]);
-  useEffect(() => { playlistRef.current   = playlist;   }, [playlist]);
-  useEffect(() => { isDraggingRef.current = isDragging;  }, [isDragging]);
+  const currentSongIndexRef = useRef(currentSongIndex);
+  const durationRef = useRef(duration);
+  isShuffleRef.current  = isShuffle;
+  isRepeatRef.current   = isRepeat;
+  playlistRef.current   = playlist;
+  isDraggingRef.current = isDragging;
+  currentSongIndexRef.current = currentSongIndex;
+  durationRef.current   = duration;
 
   const rafId = useRef(0);
 
@@ -124,11 +128,11 @@ export function useAudio() {
   );
 
   const handlePlayPause = useCallback(() => {
-    if (!audioRef.current || !playlist.length) return;
-    if (!playlist[currentSongIndex]?.src) { setIsPlaying(p => !p); return; }
+    if (!audioRef.current || !playlistRef.current.length) return;
+    if (!playlistRef.current[currentSongIndexRef.current]?.src) { setIsPlaying(p => !p); return; }
     if (audioRef.current.paused) audioRef.current.play().catch(() => {});
     else                         audioRef.current.pause();
-  }, [currentSongIndex, playlist]);
+  }, []);
 
   const handleNext = useCallback(() => {
     if (!playlist.length) return;
@@ -154,12 +158,12 @@ export function useAudio() {
   }, []);
 
   const handleSeek = useCallback((val: number[]) => {
-    const song = playlistRef.current[currentSongIndex];
-    const d = song?.src ? (audioRef.current?.duration ?? duration) : duration;
+    const song = playlistRef.current[currentSongIndexRef.current];
+    const d = song?.src ? (audioRef.current?.duration ?? durationRef.current) : durationRef.current;
     const t = (val[0] / 100) * d;
     setCurrentTime(t);
     if (audioRef.current && song?.src) audioRef.current.currentTime = t;
-  }, [currentSongIndex, duration]);
+  }, []);
 
   const progressPct = useMemo((): number => {
     const d = currentSong?.src ? duration : (currentSong?.durationSecs ?? 0);

@@ -1,4 +1,4 @@
-import { useRef, memo } from 'react';
+import { useRef, useMemo, memo } from 'react';
 import { BookOpen, Upload, Trash2, ArrowLeft, BookMarked } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Book, BookMark, ReadingProgress } from '@/lib/types';
@@ -25,10 +25,10 @@ type Props = {
   onRemoveBookmark: (id: string) => void;
 };
 
+const SHELF_DATE_FMT = new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' });
+
 function formatDate(iso: string) {
-  try {
-    return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(new Date(iso));
-  } catch { return ''; }
+  try { return SHELF_DATE_FMT.format(new Date(iso)); } catch { return ''; }
 }
 
 export const LibraryView = memo(function LibraryView({
@@ -40,17 +40,21 @@ export const LibraryView = memo(function LibraryView({
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const activeBookmarks = useMemo(
+    () => activeBook ? bookmarks.filter(b => b.bookId === activeBook.id) : [],
+    [bookmarks, activeBook],
+  );
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) { onImport(file); e.target.value = ''; }
   };
 
-  // If active book → show immersive reader
   if (activeBook) {
     return (
       <BookReader
         book={activeBook}
-        bookmarks={bookmarks.filter(b => b.bookId === activeBook.id)}
+        bookmarks={activeBookmarks}
         progress={progress}
         fontSize={fontSize}
         lineHeight={lineHeight}
