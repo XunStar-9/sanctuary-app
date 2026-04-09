@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Note } from '@/lib/types';
 import { DEFAULT_NOTES } from '@/lib/types';
 
@@ -19,8 +19,13 @@ export function useNotes() {
   const [activeNoteId, setActiveNoteId] = useState<string>(initialNotes[0]?.id ?? '');
   const [searchQuery,  setSearchQuery]  = useState('');
 
+  const saveTimer = useRef(0);
   useEffect(() => {
-    localStorage.setItem('sanctuary_notes', JSON.stringify(notes));
+    clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      localStorage.setItem('sanctuary_notes', JSON.stringify(notes));
+    }, 300);
+    return () => clearTimeout(saveTimer.current);
   }, [notes]);
 
   const activeNote = useMemo(

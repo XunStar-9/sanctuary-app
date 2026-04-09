@@ -48,11 +48,23 @@ export function useAudio() {
   useEffect(() => { playlistRef.current   = playlist;   }, [playlist]);
   useEffect(() => { isDraggingRef.current = isDragging;  }, [isDragging]);
 
+  const rafId = useRef(0);
+
   useEffect(() => {
     const audio = new Audio();
     audioRef.current = audio;
 
-    const onTimeUpdate     = () => { if (!isDraggingRef.current) setCurrentTime(audio.currentTime); };
+    let lastReportedTime = 0;
+    const onTimeUpdate = () => {
+      if (isDraggingRef.current) return;
+      const t = audio.currentTime;
+      if (Math.abs(t - lastReportedTime) < 0.25) return;
+      cancelAnimationFrame(rafId.current);
+      rafId.current = requestAnimationFrame(() => {
+        lastReportedTime = t;
+        setCurrentTime(t);
+      });
+    };
     const onDurationChange = () => { if (isFinite(audio.duration)) setDuration(audio.duration); };
     const onPlay  = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
@@ -72,6 +84,7 @@ export function useAudio() {
     audio.addEventListener('ended',          onEnded);
 
     return () => {
+      cancelAnimationFrame(rafId.current);
       audio.removeEventListener('timeupdate',     onTimeUpdate);
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('play',           onPlay);
@@ -105,7 +118,10 @@ export function useAudio() {
     else           audio.pause();
   }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const currentSong = playlist[currentSongIndex] ?? playlist[0] ?? undefined;
+  const currentSong = useMemo(
+    () => playlist[currentSongIndex] ?? playlist[0] ?? undefined,
+    [playlist, currentSongIndex],
+  );
 
   const handlePlayPause = useCallback(() => {
     if (!audioRef.current || !playlist.length) return;

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type { Book, BookMark, ReadingProgress } from '@/lib/types';
 import { parseTxt, parseEpub } from '@/utils/bookParser';
 
@@ -20,6 +20,15 @@ export function useBooks() {
   const [activeBookId, setActiveBookId] = useState<string | null>(() => loadJson('sanctuary_active_book', null));
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+
+  const bookSaveTimer = useRef(0);
+  useEffect(() => {
+    clearTimeout(bookSaveTimer.current);
+    bookSaveTimer.current = window.setTimeout(() => {
+      saveJson('sanctuary_books', books);
+    }, 500);
+    return () => clearTimeout(bookSaveTimer.current);
+  }, [books]);
 
   const activeBook = useMemo(() => books.find(b => b.id === activeBookId) ?? null, [books, activeBookId]);
 
@@ -54,11 +63,7 @@ export function useBooks() {
         chapters: parsed.chapters,
         addedAt: new Date().toISOString(),
       };
-      setBooks(prev => {
-        const next = [book, ...prev];
-        saveJson('sanctuary_books', next);
-        return next;
-      });
+      setBooks(prev => [book, ...prev]);
       setActiveBookId(book.id);
       saveJson('sanctuary_active_book', book.id);
       const initialProgress: ReadingProgress = { bookId: book.id, chapterId: book.chapters[0]?.id ?? '', position: 0 };
@@ -77,11 +82,7 @@ export function useBooks() {
   }, []);
 
   const removeBook = useCallback((bookId: string) => {
-    setBooks(prev => {
-      const next = prev.filter(b => b.id !== bookId);
-      saveJson('sanctuary_books', next);
-      return next;
-    });
+    setBooks(prev => prev.filter(b => b.id !== bookId));
     setBookmarks(prev => {
       const next = prev.filter(b => b.bookId !== bookId);
       saveJson('sanctuary_bookmarks', next);
