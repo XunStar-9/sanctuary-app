@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Song } from '@/lib/types';
 import { DEFAULT_PLAYLIST, GRADIENTS } from '@/lib/types';
+import {
+  saveAudioFile, loadAudioFile, removeAudioFile,
+  savePlaylistMeta, loadPlaylistMeta,
+} from '@/lib/audioStorage';
 
 function secsToString(s: number): string {
   const m = Math.floor(s / 60);
@@ -21,11 +25,22 @@ function parseFileMeta(file: File, index: number): Omit<Song, 'durationSecs' | '
   };
 }
 
+function buildInitialPlaylist(): Song[] {
+  const saved = loadPlaylistMeta();
+  if (saved.length) {
+    return [
+      ...DEFAULT_PLAYLIST,
+      ...saved.map(s => ({ ...s, src: undefined })),
+    ];
+  }
+  return DEFAULT_PLAYLIST;
+}
+
 const MAX_RETRY = 3;
 const RETRY_DELAY = 1000;
 
 export function useAudio() {
-  const [playlist,          setPlaylist]          = useState<Song[]>(DEFAULT_PLAYLIST);
+  const [playlist,          setPlaylist]          = useState<Song[]>(buildInitialPlaylist);
   const [currentSongIndex,  setCurrentSongIndex]  = useState(0);
   const [isPlaying,         setIsPlaying]         = useState(false);
   const [isShuffle,         setIsShuffle]         = useState(false);
@@ -61,6 +76,41 @@ export function useAudio() {
   isPlayingRef.current  = isPlaying;
 
   const rafId = useRef(0);
+
+  useEffect(() => {
+    const saved = loadPlaylistMeta();
+    if (!saved.length) return;
+    let cancelled = false;
+    (async () => {
+      const restored: Song[] = [];
+      for (const meta of saved) {
+        const blobUrl = await loadAudioFile(meta.id);
+        restored.push({ ...meta, src: blobUrl ?? undefined });
+      }
+      if (cancelled) return;
+      setPlaylist(prev => {
+        const defaults = prev.filter(s => !s.isUploaded);
+        return [...defaults, ...restored];
+      });
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const persistTimer = useRef(0);
+  useEffect(() => {
+    clearTimeout(persistTimer.current);
+    persistTimer.current = window.setTimeout(() => {
+      const uploaded = playlist.filter(s => s.isUploaded);
+      savePlaylistMeta(
+        uploaded.map(s => ({
+          id: s.id, title: s.title, artist: s.artist,
+          duration: s.duration, durationSecs: s.durationSecs,
+          gradient: s.gradient, isUploaded: true as const,
+        }))
+      );
+    }, 500);
+    return () => clearTimeout(persistTimer.current);
+  }, [playlist]);
 
   const safePlay = useCallback((audio: HTMLAudioElement) => {
     const p = audio.play();
@@ -274,6 +324,9 @@ export function useAudio() {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     const newSongs: Song[] = files.map((f, i) => ({ ...parseFileMeta(f, i), durationSecs: 0, duration: '--:--' }));
+    for (let i = 0; i < files.length; i++) {
+      saveAudioFile(newSongs[i].id, files[i]).catch(() => {});
+    }
     setPlaylist(prev => {
       const next = [...prev, ...newSongs];
       setCurrentSongIndex(prev.length);
@@ -289,7 +342,10 @@ export function useAudio() {
       const removeIdx = prev.findIndex(s => s.id === songId);
       if (removeIdx === -1) return prev;
       const removed = prev[removeIdx];
-      if (removed.isUploaded && removed.src) URL.revokeObjectURL(removed.src);
+      if (removed.isUploaded) {
+        if (removed.src) URL.revokeObjectURL(removed.src);
+        removeAudioFile(songId).catch(() => {});
+      }
       const next = prev.filter(s => s.id !== songId);
       if (!next.length) {
         setCurrentSongIndex(0);

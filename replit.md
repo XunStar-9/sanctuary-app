@@ -33,6 +33,7 @@ Personal notes & music PWA built with React + Vite + Tailwind CSS.
 **Features**: Notes CRUD (localStorage), HTML5 audio player with file upload, 5 switchable themes, settings panel, immersive novel reader (TXT/EPUB), typography customization, text formatting toolbar on selection.
 
 **UI features wired**:
+- Uploaded music persisted to IndexedDB (survives page refresh); playlist metadata in localStorage
 - Volume control slider with mute/unmute toggle (restores previous volume)
 - Note delete with double-click confirm (trash icon visible on mobile, hover-reveal on desktop)
 - Search clear button (X) in sidebar search field
