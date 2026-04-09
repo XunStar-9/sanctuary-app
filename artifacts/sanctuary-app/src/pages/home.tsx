@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX,
-  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2, Palette
+  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2, SlidersHorizontal, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,12 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-// ─── Themes ──────────────────────────────────────────────────────────────────
+// ─── Settings types & constants ───────────────────────────────────────────────
 
-type ThemeId = 'warm' | 'ink' | 'forest' | 'dusk' | 'stone';
+type ThemeId     = 'warm' | 'ink' | 'forest' | 'dusk' | 'stone';
+type FontSize    = 'sm' | 'md' | 'lg';
+type LineHeight  = 'tight' | 'normal' | 'relaxed';
+type EditorFont  = 'serif' | 'sans';
 
 const THEMES: { id: ThemeId; label: string; color: string }[] = [
   { id: 'warm',   label: '暖沙', color: '#C4937A' },
@@ -21,52 +24,149 @@ const THEMES: { id: ThemeId; label: string; color: string }[] = [
   { id: 'stone',  label: '石砚', color: '#555555' },
 ];
 
-function ThemePicker({ theme, onChange }: { theme: ThemeId; onChange: (t: ThemeId) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+const FONT_SIZE_MAP: Record<FontSize, string>   = { sm: 'text-base', md: 'text-lg', lg: 'text-xl' };
+const LINE_HEIGHT_MAP: Record<LineHeight, string> = { tight: 'leading-[1.8]', normal: 'leading-[2.2]', relaxed: 'leading-[2.8]' };
+
+// ─── Settings Panel ────────────────────────────────────────────────────────────
+
+type SettingsProps = {
+  open: boolean;
+  onClose: () => void;
+  theme: ThemeId;       onTheme: (v: ThemeId) => void;
+  fontSize: FontSize;   onFontSize: (v: FontSize) => void;
+  lineHeight: LineHeight; onLineHeight: (v: LineHeight) => void;
+  editorFont: EditorFont; onEditorFont: (v: EditorFont) => void;
+};
+
+function SettingsPanel({ open, onClose, theme, onTheme, fontSize, onFontSize, lineHeight, onLineHeight, editorFont, onEditorFont }: SettingsProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onClose]);
+
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="mb-6">
+      <p className="text-[10px] font-sans font-medium tracking-[0.15em] uppercase text-muted-foreground mb-3">{title}</p>
+      {children}
+    </div>
+  );
+
+  const OptionRow = ({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) => (
+    <button onClick={onClick}
+      className={cn(
+        "flex-1 py-2 rounded-xl text-sm font-sans transition-all duration-150 border",
+        active
+          ? "bg-primary text-primary-foreground border-transparent shadow-sm"
+          : "bg-muted/50 text-foreground/70 border-transparent hover:bg-muted hover:text-foreground"
+      )}>
+      {label}
+    </button>
+  );
 
   return (
-    <div ref={ref} className="relative shrink-0">
-      <button
-        onClick={() => setOpen(p => !p)}
+    <>
+      {/* Backdrop */}
+      <div
         className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center transition-colors",
-          open ? "bg-muted" : "hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+          "fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px] transition-opacity duration-300",
+          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
-        title="切换主题"
-      >
-        <Palette className="w-4 h-4" />
-      </button>
+        onClick={onClose}
+      />
 
-      {open && (
-        <div className="absolute right-0 top-10 z-50 bg-card border border-border rounded-2xl shadow-lg p-3 flex flex-col gap-2.5 min-w-[120px]">
-          {THEMES.map(t => (
-            <button
-              key={t.id}
-              onClick={() => { onChange(t.id); setOpen(false); }}
-              className={cn(
-                "flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-colors text-sm font-sans w-full text-left",
-                theme === t.id ? "bg-muted" : "hover:bg-muted/60"
-              )}
-            >
-              <span
-                className="w-4 h-4 rounded-full shrink-0 ring-offset-background transition-all"
-                style={{ backgroundColor: t.color, boxShadow: theme === t.id ? `0 0 0 2px ${t.color}55, 0 0 0 3px hsl(var(--background))` : 'none' }}
-              />
-              <span className="text-foreground/80">{t.label}</span>
-            </button>
-          ))}
+      {/* Panel */}
+      <div
+        ref={panelRef}
+        className={cn(
+          "fixed top-0 right-0 h-full z-50 w-72 bg-card border-l border-border shadow-2xl flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+          open ? "translate-x-0" : "translate-x-full"
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border/60 shrink-0">
+          <span className="text-sm font-medium text-foreground tracking-wide">设置</span>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      )}
-    </div>
+
+        {/* Content */}
+        <ScrollArea className="flex-1">
+          <div className="px-6 py-5">
+
+            {/* Theme */}
+            <Section title="主题配色">
+              <div className="flex flex-col gap-1.5">
+                {THEMES.map(t => (
+                  <button key={t.id} onClick={() => onTheme(t.id)}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-sm font-sans w-full text-left",
+                      theme === t.id ? "bg-muted" : "hover:bg-muted/60"
+                    )}>
+                    <span className="w-5 h-5 rounded-full shrink-0 transition-all" style={{
+                      backgroundColor: t.color,
+                      boxShadow: theme === t.id ? `0 0 0 2px hsl(var(--background)), 0 0 0 4px ${t.color}` : 'none'
+                    }} />
+                    <span className={cn("transition-colors", theme === t.id ? "text-foreground font-medium" : "text-foreground/70")}>{t.label}</span>
+                    {theme === t.id && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                  </button>
+                ))}
+              </div>
+            </Section>
+
+            {/* Font size */}
+            <Section title="字号大小">
+              <div className="flex gap-2">
+                <OptionRow label="小" active={fontSize === 'sm'} onClick={() => onFontSize('sm')} />
+                <OptionRow label="中" active={fontSize === 'md'} onClick={() => onFontSize('md')} />
+                <OptionRow label="大" active={fontSize === 'lg'} onClick={() => onFontSize('lg')} />
+              </div>
+            </Section>
+
+            {/* Line height */}
+            <Section title="行间距">
+              <div className="flex gap-2">
+                <OptionRow label="紧凑" active={lineHeight === 'tight'}   onClick={() => onLineHeight('tight')} />
+                <OptionRow label="舒适" active={lineHeight === 'normal'}  onClick={() => onLineHeight('normal')} />
+                <OptionRow label="宽松" active={lineHeight === 'relaxed'} onClick={() => onLineHeight('relaxed')} />
+              </div>
+            </Section>
+
+            {/* Editor font */}
+            <Section title="编辑器字体">
+              <div className="flex gap-2">
+                <button onClick={() => onEditorFont('serif')}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl text-sm border transition-all duration-150",
+                    editorFont === 'serif'
+                      ? "bg-primary text-primary-foreground border-transparent shadow-sm"
+                      : "bg-muted/50 text-foreground/70 border-transparent hover:bg-muted"
+                  )}>
+                  <span className="font-serif block">衬线体</span>
+                  <span className="text-[10px] opacity-60 block mt-0.5">Playfair</span>
+                </button>
+                <button onClick={() => onEditorFont('sans')}
+                  className={cn(
+                    "flex-1 py-3 rounded-xl text-sm border transition-all duration-150",
+                    editorFont === 'sans'
+                      ? "bg-primary text-primary-foreground border-transparent shadow-sm"
+                      : "bg-muted/50 text-foreground/70 border-transparent hover:bg-muted"
+                  )}>
+                  <span className="font-sans block">无衬线</span>
+                  <span className="text-[10px] opacity-60 block mt-0.5">Inter</span>
+                </button>
+              </div>
+            </Section>
+
+          </div>
+        </ScrollArea>
+      </div>
+    </>
   );
 }
 
@@ -173,14 +273,16 @@ function parseFileMeta(file: File, index: number): Omit<Song, 'durationSecs' | '
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [theme, setTheme] = useState<ThemeId>(() => {
-    return (localStorage.getItem('sanctuary_theme') as ThemeId) ?? 'warm';
-  });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [theme,      setTheme]      = useState<ThemeId>(    () => (localStorage.getItem('sanctuary_theme')       as ThemeId)      ?? 'warm');
+  const [fontSize,   setFontSize]   = useState<FontSize>(   () => (localStorage.getItem('sanctuary_fontsize')    as FontSize)     ?? 'md');
+  const [lineHeight, setLineHeight] = useState<LineHeight>(  () => (localStorage.getItem('sanctuary_lineheight')  as LineHeight)   ?? 'normal');
+  const [editorFont, setEditorFont] = useState<EditorFont>(  () => (localStorage.getItem('sanctuary_editorfont')  as EditorFont)   ?? 'serif');
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('sanctuary_theme', theme);
-  }, [theme]);
+  useEffect(() => { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('sanctuary_theme', theme); }, [theme]);
+  useEffect(() => { localStorage.setItem('sanctuary_fontsize',   fontSize);   }, [fontSize]);
+  useEffect(() => { localStorage.setItem('sanctuary_lineheight', lineHeight); }, [lineHeight]);
+  useEffect(() => { localStorage.setItem('sanctuary_editorfont', editorFont); }, [editorFont]);
 
   const [notes, setNotes] = useState<Note[]>(() => {
     const saved = localStorage.getItem('sanctuary_notes');
@@ -403,7 +505,10 @@ export default function Home() {
           <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary" onClick={handleAddNote}>
             <Plus className="w-4 h-4" />
           </Button>
-          <ThemePicker theme={theme} onChange={setTheme} />
+          <button onClick={() => setSettingsOpen(true)}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+            <SlidersHorizontal className="w-4 h-4" />
+          </button>
         </div>
       </div>
       <ScrollArea className="flex-1">
@@ -441,7 +546,12 @@ export default function Home() {
             </p>
             <textarea value={activeNote.content}
               onChange={e => updateActiveNote({ content: e.target.value, preview: e.target.value.substring(0, 80) + '...' })}
-              className="w-full min-h-[50vh] resize-none bg-transparent border-none outline-none text-foreground/80 leading-[2.2] text-lg font-serif placeholder-muted-foreground/30 focus:ring-0"
+              className={cn(
+                "w-full min-h-[50vh] resize-none bg-transparent border-none outline-none text-foreground/80 placeholder-muted-foreground/30 focus:ring-0",
+                FONT_SIZE_MAP[fontSize],
+                LINE_HEIGHT_MAP[lineHeight],
+                editorFont === 'serif' ? 'font-serif' : 'font-sans'
+              )}
               placeholder="Start writing..." />
           </div>
         ) : (
@@ -605,7 +715,10 @@ export default function Home() {
                 <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted/80 text-primary" onClick={handleAddNote}>
                   <Plus className="w-4 h-4" />
                 </Button>
-                <ThemePicker theme={theme} onChange={setTheme} />
+                <button onClick={() => setSettingsOpen(true)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+                  <SlidersHorizontal className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
@@ -639,7 +752,12 @@ export default function Home() {
                     </p>
                     <textarea value={activeNote.content}
                       onChange={e => updateActiveNote({ content: e.target.value, preview: e.target.value.substring(0, 80) + '...' })}
-                      className="w-full flex-1 resize-none bg-transparent border-none outline-none text-foreground/80 leading-[2.2] text-lg font-serif placeholder-muted-foreground/30 focus:ring-0"
+                      className={cn(
+                        "w-full flex-1 resize-none bg-transparent border-none outline-none text-foreground/80 placeholder-muted-foreground/30 focus:ring-0",
+                        FONT_SIZE_MAP[fontSize],
+                        LINE_HEIGHT_MAP[lineHeight],
+                        editorFont === 'serif' ? 'font-serif' : 'font-sans'
+                      )}
                       placeholder="Start writing..." />
                   </div>
                 ) : (
@@ -684,6 +802,15 @@ export default function Home() {
           </button>
         </div>
       </div>
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        theme={theme}       onTheme={setTheme}
+        fontSize={fontSize} onFontSize={setFontSize}
+        lineHeight={lineHeight} onLineHeight={setLineHeight}
+        editorFont={editorFont} onEditorFont={setEditorFont}
+      />
     </div>
   );
 }
