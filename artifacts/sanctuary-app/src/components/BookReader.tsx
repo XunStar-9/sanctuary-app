@@ -20,7 +20,6 @@ type Props = {
   onRemoveBookmark: (id: string) => void;
 };
 
-// Render content as proper paragraphs (handles both \n\n and \n separated text)
 function ContentParagraphs({ content, fontSize, lineHeight, editorFont }: {
   content: string;
   fontSize: FontSize;
@@ -28,13 +27,11 @@ function ContentParagraphs({ content, fontSize, lineHeight, editorFont }: {
   editorFont: EditorFont;
 }) {
   const paragraphs = useMemo(() => {
-    // Split by double newlines (paragraph breaks)
     const blocks = content.split(/\n{2,}/);
     const result: string[] = [];
     for (const block of blocks) {
       const trimmed = block.trim();
       if (!trimmed) continue;
-      // If a block contains single-newline sub-lines (common in some novels), keep them together
       result.push(trimmed);
     }
     return result;
@@ -50,7 +47,6 @@ function ContentParagraphs({ content, fontSize, lineHeight, editorFont }: {
   return (
     <div className={baseClass}>
       {paragraphs.map((para, i) => {
-        // Detect if it's a heading-like line (short, standalone)
         const isHeading = para.length <= 40 && !para.includes('\n') && i > 0;
         if (isHeading) {
           return (
@@ -59,7 +55,6 @@ function ContentParagraphs({ content, fontSize, lineHeight, editorFont }: {
             </p>
           );
         }
-        // Normal paragraph — handle any internal single newlines as inline
         const lines = para.split('\n').map(l => l.trim()).filter(Boolean);
         return (
           <p key={i} className="mb-[1.2em] indent-[2em] break-words">
@@ -96,7 +91,6 @@ export const BookReader = memo(function BookReader({
     b => b.bookId === book.id && b.chapterId === chapter?.id && Math.abs(b.position - scrollPct) < 3
   );
 
-  // Show toolbar then schedule auto-hide
   const showToolbar = useCallback(() => {
     setToolbarVisible(true);
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
@@ -112,10 +106,8 @@ export const BookReader = memo(function BookReader({
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
-    // Scroll to top for new chapters, restore position for resumed chapter
     const restorePos = progress?.chapterId === chapter?.id ? (progress?.position ?? 0) : 0;
     if (restorePos > 0) {
-      // Wait for layout
       requestAnimationFrame(() => {
         el.scrollTop = (restorePos / 100) * (el.scrollHeight - el.clientHeight);
       });
@@ -136,7 +128,6 @@ export const BookReader = memo(function BookReader({
   }, [book.id, chapter, onSaveProgress]);
 
   const handleContentClick = useCallback((e: React.MouseEvent) => {
-    // Don't fire if clicking inside the panel
     if ((e.target as Element).closest('[data-panel]')) return;
     if (panelOpen) { setPanelOpen(false); return; }
     showToolbar();
@@ -148,13 +139,28 @@ export const BookReader = memo(function BookReader({
     setPanelOpen(false);
   }, []);
 
+  // Use functional updaters to avoid stale chapterIdx in closures
   const handlePrevChapter = useCallback(() => {
-    if (chapterIdx > 0) goToChapter(chapterIdx - 1);
-  }, [chapterIdx, goToChapter]);
+    setChapterIdx(prev => {
+      if (prev > 0) {
+        setScrollPct(0);
+        setPanelOpen(false);
+        return prev - 1;
+      }
+      return prev;
+    });
+  }, []);
 
   const handleNextChapter = useCallback(() => {
-    if (chapterIdx < totalChapters - 1) goToChapter(chapterIdx + 1);
-  }, [chapterIdx, totalChapters, goToChapter]);
+    setChapterIdx(prev => {
+      if (prev < totalChapters - 1) {
+        setScrollPct(0);
+        setPanelOpen(false);
+        return prev + 1;
+      }
+      return prev;
+    });
+  }, [totalChapters]);
 
   const handleAddBookmark = useCallback(() => {
     if (!chapter) return;
@@ -179,18 +185,18 @@ export const BookReader = memo(function BookReader({
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col" onClick={handleContentClick}>
 
-      {/* ── Top toolbar ── */}
+      {/* ── Top toolbar ── pointer-events-none on gradient, auto on buttons */}
       <div className={cn(
-        "absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-4 h-14",
+        "absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-4 h-14 pointer-events-none",
         "bg-gradient-to-b from-background via-background/80 to-transparent",
         "transition-all duration-300",
-        toolbarVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2 pointer-events-none"
+        toolbarVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
       )}>
         <button onClick={e => { e.stopPropagation(); onBack(); }}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0">
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors shrink-0 pointer-events-auto">
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <div className="flex-1 min-w-0 px-1">
+        <div className="flex-1 min-w-0 px-1 pointer-events-auto">
           <p className="text-[13px] font-medium text-foreground truncate leading-tight">{book.title}</p>
           <p className="text-[11px] font-sans text-muted-foreground/70 truncate leading-tight">{chapter.title}</p>
         </div>
@@ -198,14 +204,14 @@ export const BookReader = memo(function BookReader({
           onClick={e => { e.stopPropagation(); handleAddBookmark(); }}
           title={isBookmarked ? '已添加书签' : '添加书签'}
           className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0",
+            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 pointer-events-auto",
             isBookmarked ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
           )}>
           {isBookmarked ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
         </button>
         <button onClick={e => { e.stopPropagation(); setPanelOpen(p => !p); showToolbar(); }}
           className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0",
+            "w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 pointer-events-auto",
             panelOpen ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
           )}>
           <List className="w-4 h-4" />
@@ -216,10 +222,9 @@ export const BookReader = memo(function BookReader({
       <div
         ref={contentRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overscroll-none pt-16 pb-20"
+        className="flex-1 overflow-y-auto overscroll-none pt-16 pb-28"
       >
         <div className="max-w-[680px] mx-auto px-5 md:px-12 py-6">
-          {/* Chapter heading */}
           <h2 className={cn(
             "font-serif font-semibold text-foreground text-center mb-12 leading-snug tracking-wide",
             fontSize === 'lg' ? 'text-2xl' : 'text-xl'
@@ -235,22 +240,31 @@ export const BookReader = memo(function BookReader({
           />
 
           {/* Chapter navigation at bottom of content */}
-          {chapterIdx < totalChapters - 1 && (
-            <button
-              onClick={e => { e.stopPropagation(); handleNextChapter(); }}
-              className="w-full mt-16 py-3 rounded-xl border border-border/40 text-sm font-sans text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors">
-              下一章：{book.chapters[chapterIdx + 1]?.title}
-            </button>
-          )}
+          <div className="mt-16 flex flex-col gap-3">
+            {chapterIdx < totalChapters - 1 && (
+              <button
+                onClick={e => { e.stopPropagation(); handleNextChapter(); }}
+                className="relative z-20 w-full py-3.5 rounded-xl border border-border/40 text-sm font-sans text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors">
+                下一章：{book.chapters[chapterIdx + 1]?.title}
+              </button>
+            )}
+            {chapterIdx > 0 && (
+              <button
+                onClick={e => { e.stopPropagation(); handlePrevChapter(); }}
+                className="relative z-20 w-full py-3 rounded-xl text-[13px] font-sans text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                上一章：{book.chapters[chapterIdx - 1]?.title}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Bottom progress bar ── */}
+      {/* ── Bottom progress bar ── pointer-events-none on gradient, auto on buttons */}
       <div className={cn(
-        "absolute bottom-0 left-0 right-0 z-10 px-4 py-3",
+        "absolute bottom-0 left-0 right-0 z-10 px-4 py-3 pointer-events-none",
         "bg-gradient-to-t from-background via-background/80 to-transparent",
         "transition-all duration-300",
-        toolbarVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2 pointer-events-none"
+        toolbarVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
       )}>
         <div className="h-[2px] bg-muted/40 rounded-full mb-3 overflow-hidden">
           <div
@@ -258,7 +272,7 @@ export const BookReader = memo(function BookReader({
             style={{ width: `${scrollPct}%` }}
           />
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pointer-events-auto">
           <button onClick={e => { e.stopPropagation(); handlePrevChapter(); }}
             disabled={chapterIdx === 0}
             className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30">
@@ -278,7 +292,6 @@ export const BookReader = memo(function BookReader({
 
       {/* ── Chapter / Bookmark side panel ── */}
       <>
-        {/* Backdrop */}
         <div
           data-panel
           onClick={e => { e.stopPropagation(); setPanelOpen(false); }}
@@ -287,7 +300,6 @@ export const BookReader = memo(function BookReader({
             panelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
           )}
         />
-        {/* Panel */}
         <div
           data-panel
           className={cn(
@@ -295,7 +307,6 @@ export const BookReader = memo(function BookReader({
             "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
             panelOpen ? "translate-x-0" : "translate-x-full"
           )}>
-          {/* Panel tabs */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
             <div className="flex gap-1 bg-muted/50 rounded-xl p-0.5">
               {(['chapters', 'bookmarks'] as const).map(tab => (
@@ -314,7 +325,6 @@ export const BookReader = memo(function BookReader({
             </button>
           </div>
 
-          {/* Panel body */}
           <div className="flex-1 overflow-y-auto">
             {panelTab === 'chapters' && (
               <div className="py-2">
