@@ -45,7 +45,7 @@ jobs:
         run: pnpm run build
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Setup Java
         uses: actions/setup-java@v5
