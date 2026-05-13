@@ -117,20 +117,46 @@ export function App() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(70);
   const [isMuted, setIsMuted] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  // isDragging tracks seek-bar interaction; use ref (not state) so the audio
+  // timeupdate handler — registered once with [] deps — always reads the live value.
+  const [isDraggingState, setIsDraggingState] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentSong = playlist[currentSongIndex] ?? playlist[0];
 
+  // Refs that mirror state so stale-closure event listeners always see current values
+  const isRepeatRef = useRef(false);
+  const isShuffleRef = useRef(false);
+  const playlistLengthRef = useRef(playlist.length);
+  const isDraggingRef = useRef(false);
+
+  // Keep refs in sync with state
+  useEffect(() => { isRepeatRef.current = isRepeat; }, [isRepeat]);
+  useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
+  useEffect(() => { playlistLengthRef.current = playlist.length; }, [playlist.length]);
+
   // ── Audio engine ──────────────────────────────────────────────────────────
+
+  const handleAutoNext = useCallback(() => {
+    const len = playlistLengthRef.current;
+    setCurrentSongIndex(prev =>
+      isShuffleRef.current
+        ? (() => { const n = Math.floor(Math.random() * len); return n === prev ? (n + 1) % len : n; })()
+        : (prev + 1) % len
+    );
+  }, []);
 
   useEffect(() => {
     const audio = new Audio();
     audioRef.current = audio;
-    const onTimeUpdate = () => { if (!isDragging) setCurrentTime(audio.currentTime); };
+    // Use refs so these handlers always read the latest state without stale closures
+    const onTimeUpdate = () => { if (!isDraggingRef.current) setCurrentTime(audio.currentTime); };
     const onDurationChange = () => { if (isFinite(audio.duration)) setDuration(audio.duration); };
-    const onEnded = () => { if (isRepeat) { audio.currentTime = 0; audio.play(); return; } handleAutoNext(); };
+    const onEnded = () => {
+      if (isRepeatRef.current) { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+      handleAutoNext();
+    };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     audio.addEventListener('timeupdate', onTimeUpdate);
@@ -148,14 +174,8 @@ export function App() {
       audio.pause();
       audioRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleAutoNext = useCallback(() => {
-    setCurrentSongIndex(prev => isShuffle
-      ? (() => { const n = Math.floor(Math.random() * playlist.length); return n === prev ? (n + 1) % playlist.length : n; })()
-      : (prev + 1) % playlist.length
-    );
-  }, [isShuffle, playlist.length]);
 
   useEffect(() => {
     const audio = audioRef.current; if (!audio) return;
@@ -217,16 +237,26 @@ export function App() {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     const newSongs: Song[] = files.map((f, i) => ({ ...parseFileMeta(f, i), durationSecs: 0, duration: '--:--' }));
-    setPlaylist(prev => [...prev, ...newSongs]);
-    setCurrentSongIndex(playlist.length);
+    // Use the functional updater so we read the latest playlist length, not a stale closure value
+    setPlaylist(prev => {
+      setCurrentSongIndex(prev.length); // index of the first newly added song
+      return [...prev, ...newSongs];
+    });
     setIsPlaying(true);
     e.target.value = '';
   };
 
   const handleRemoveSong = (e: React.MouseEvent, songId: string) => {
     e.stopPropagation();
-    setPlaylist(prev => { const next = prev.filter(s => s.id !== songId); return next.length ? next : DEFAULT_PLAYLIST; });
-    setCurrentSongIndex(0); setIsPlaying(false);
+    setPlaylist(prev => {
+      const target = prev.find(s => s.id === songId);
+      // Revoke the object URL to free memory
+      if (target?.src) URL.revokeObjectURL(target.src);
+      const next = prev.filter(s => s.id !== songId);
+      return next.length ? next : DEFAULT_PLAYLIST;
+    });
+    setCurrentSongIndex(0);
+    setIsPlaying(false);
   };
 
   // ── Notes ─────────────────────────────────────────────────────────────────
@@ -239,13 +269,17 @@ export function App() {
       date: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' }).format(new Date()),
       preview: '', content: ''
     };
-    setNotes([n, ...notes]); setActiveNoteId(n.id);
+    setNotes(prev => [n, ...prev]);
+    setActiveNoteId(n.id);
   };
 
-  const updateActiveNote = (updates: Partial<Note>) => {
-    if (!activeNote) return;
-    setNotes(notes.map(n => n.id === activeNote.id ? { ...n, ...updates } : n));
-  };
+  const activeNoteId_ref = useRef(activeNoteId);
+  useEffect(() => { activeNoteId_ref.current = activeNoteId; }, [activeNoteId]);
+
+  const updateActiveNote = useCallback((updates: Partial<Note>) => {
+    const id = activeNoteId_ref.current;
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n));
+  }, []);
 
   const filteredNotes = notes.filter(n =>
     n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -303,7 +337,12 @@ export function App() {
                     <PenLine className="w-3 h-3" />{activeNote.date}
                   </p>
                   <textarea value={activeNote.content}
-                    onChange={e => updateActiveNote({ content: e.target.value, preview: e.target.value.substring(0, 80) + '...' })}
+                    onChange={e => {
+                      const text = e.target.value;
+                      // Only append '...' when content actually exceeds the preview length
+                      const preview = text.length > 80 ? text.substring(0, 80) + '...' : text;
+                      updateActiveNote({ content: text, preview });
+                    }}
                     className="w-full flex-1 resize-none bg-transparent border-none outline-none text-foreground/80 leading-[2.2] text-lg font-serif placeholder-muted-foreground/30 focus:ring-0"
                     placeholder="Start writing..." />
                 </div>
@@ -341,8 +380,8 @@ export function App() {
               <Slider value={[progressPct()]} max={100} step={0.1}
                 className="[&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
                 onValueChange={handleSeek}
-                onPointerDown={() => setIsDragging(true)}
-                onPointerUp={() => setIsDragging(false)}
+                onPointerDown={() => { isDraggingRef.current = true; setIsDraggingState(true); }}
+                onPointerUp={() => { isDraggingRef.current = false; setIsDraggingState(false); }}
               />
               <div className="flex justify-between items-center mt-2 text-[11px] font-sans tracking-wider text-muted-foreground">
                 <span>{secsToString(currentTime)}</span>
