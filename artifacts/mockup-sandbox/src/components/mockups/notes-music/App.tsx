@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Volume2, VolumeX,
-  PenLine, Search, Plus, ListMusic, ArrowLeft, Upload, Music, Trash2
+  PenLine, Search, Plus, ListMusic, Upload, Music, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
