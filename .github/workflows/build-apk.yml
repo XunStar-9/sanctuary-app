@@ -30,7 +30,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Build web assets
-        working-directory: artifacts/mockup-sandbox
+        working-directory: artifacts/sanctuary-app
         env:
           BASE_PATH: "/"
         run: pnpm run build
@@ -45,15 +45,15 @@ jobs:
           java-version: 21
 
       - name: Add Android platform
-        working-directory: artifacts/mockup-sandbox
+        working-directory: artifacts/sanctuary-app
         run: npx cap add android
 
       - name: Sync Capacitor
-        working-directory: artifacts/mockup-sandbox
+        working-directory: artifacts/sanctuary-app
         run: npx cap sync android
 
       - name: Build debug APK
-        working-directory: artifacts/mockup-sandbox/android
+        working-directory: artifacts/sanctuary-app/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -62,5 +62,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sanctuary-debug-apk
-          path: artifacts/mockup-sandbox/android/app/build/outputs/apk/debug/app-debug.apk
+          path: artifacts/sanctuary-app/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
