@@ -8,7 +8,11 @@ on:
 # 最小权限原则 - 仅声明工作流实际需要的权限
 permissions:
   contents: read
-  actions: write
+
+# 避免同一分支上的重复运行
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -16,14 +20,12 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Job 级别权限限制
     permissions:
       contents: read
-      actions: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # pinned to v4 major version
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,9 +55,6 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Verify Java version
-        run: java -version
-
       - name: Add Android platform
         working-directory: artifacts/mockup-sandbox
         run: npx cap add android
@@ -66,11 +65,9 @@ jobs:
 
       - name: Build debug APK
         working-directory: artifacts/mockup-sandbox/android
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug -Dorg.gradle.java.home=$JAVA_HOME
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

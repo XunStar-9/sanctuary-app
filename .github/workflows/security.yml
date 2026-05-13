@@ -10,9 +10,14 @@ on:
     # 每周一早上 9 点（北京时间）自动运行
     - cron: "0 1 * * 1"
 
+# 顶层最小权限声明
 permissions:
   contents: read
-  security-events: write
+
+# 避免同一分支上的重复运行
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -22,6 +27,8 @@ jobs:
   secret-scan:
     name: Secret Detection
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,6 +44,8 @@ jobs:
   dependency-audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -54,17 +63,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Run npm audit (root)
-        run: pnpm audit --audit-level=high
-        continue-on-error: true
-
-      - name: Run npm audit (api-server)
-        working-directory: artifacts/api-server
-        run: pnpm audit --audit-level=high
-        continue-on-error: true
-
-      - name: Run npm audit (mockup-sandbox)
-        working-directory: artifacts/mockup-sandbox
+      - name: Run pnpm audit
         run: pnpm audit --audit-level=high
         continue-on-error: true
 

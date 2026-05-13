@@ -3,7 +3,7 @@
 
 version: 2
 updates:
-  # npm 依赖更新 (根目录)
+  # npm 依赖更新 (根目录 - pnpm workspace)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -17,40 +17,16 @@ updates:
       - "security"
     commit-message:
       prefix: "chore(deps)"
+    # 分组策略：将同类更新合并到一个 PR 中减少噪音
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
     # 忽略主要版本升级，只自动处理补丁和次要版本
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
-
-  # npm 依赖更新 (api-server)
-  - package-ecosystem: "npm"
-    directory: "/artifacts/api-server"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Asia/Shanghai"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "api-server"
-    commit-message:
-      prefix: "chore(deps-api)"
-
-  # npm 依赖更新 (mockup-sandbox)
-  - package-ecosystem: "npm"
-    directory: "/artifacts/mockup-sandbox"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Asia/Shanghai"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "mockup-sandbox"
-    commit-message:
-      prefix: "chore(deps-mockup)"
 
   # GitHub Actions 依赖更新
   - package-ecosystem: "github-actions"
@@ -66,3 +42,8 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "chore(deps-actions)"
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

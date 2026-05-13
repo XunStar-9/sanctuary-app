@@ -17,7 +17,7 @@
 | Require approvals | ✅ 至少 1 人 | 至少需要 1 位审查者批准 |
 | Dismiss stale pull request approvals | ✅ 启用 | 代码更新后需重新审查 |
 | Require status checks to pass | ✅ 启用 | CI 必须通过才能合并 |
-| Required status checks | `Build Android APK`, `Secret Detection`, `CodeQL Analysis` | 必须通过的检查 |
+| Required status checks | `build`, `Secret Detection`, `Dependency Audit`, `CodeQL Analysis` | 必须通过的检查 |
 | Require branches to be up to date | ✅ 启用 | 合并前必须是最新状态 |
 | Require conversation resolution | ✅ 启用 | 所有评论必须解决 |
 | Include administrators | ✅ 启用 | 管理员也必须遵守规则 |
