@@ -30,6 +30,16 @@ export function useBooks() {
     return () => clearTimeout(bookSaveTimer.current);
   }, [books]);
 
+  // Auto-correct stale activeBookId: if the saved active book no longer exists
+  // in the books list (e.g. it was removed, or books failed to persist before
+  // closing the tab), reset to null so we don't show a phantom book.
+  useEffect(() => {
+    if (activeBookId && !books.some(b => b.id === activeBookId)) {
+      setActiveBookId(null);
+      saveJson('sanctuary_active_book', null);
+    }
+  }, [books, activeBookId]);
+
   const activeBook = useMemo(() => books.find(b => b.id === activeBookId) ?? null, [books, activeBookId]);
 
   const bookProgress = useMemo(() =>
@@ -63,7 +73,13 @@ export function useBooks() {
         chapters: parsed.chapters,
         addedAt: new Date().toISOString(),
       };
-      setBooks(prev => [book, ...prev]);
+      setBooks(prev => {
+        const next = [book, ...prev];
+        // Persist immediately so a tab close before the debounced save fires
+        // doesn't lose the book (and leave a stale activeBookId pointing nowhere).
+        saveJson('sanctuary_books', next);
+        return next;
+      });
       setActiveBookId(book.id);
       saveJson('sanctuary_active_book', book.id);
       const initialProgress: ReadingProgress = { bookId: book.id, chapterId: book.chapters[0]?.id ?? '', position: 0 };
@@ -82,7 +98,11 @@ export function useBooks() {
   }, []);
 
   const removeBook = useCallback((bookId: string) => {
-    setBooks(prev => prev.filter(b => b.id !== bookId));
+    setBooks(prev => {
+      const next = prev.filter(b => b.id !== bookId);
+      saveJson('sanctuary_books', next);
+      return next;
+    });
     setBookmarks(prev => {
       const next = prev.filter(b => b.bookId !== bookId);
       saveJson('sanctuary_bookmarks', next);

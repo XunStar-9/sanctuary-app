@@ -165,7 +165,13 @@ export function useAudio() {
     };
     const onPlay  = () => { retryCountRef.current = 0; setIsPlaying(true); };
     const onPause = () => {
-      if (!wantPlayRef.current) setIsPlaying(false);
+      // Always reflect the audio element's actual state. If we wanted to play
+      // but the system paused us (audio focus loss, network, etc.), we still
+      // need to show the UI as paused so the user can manually resume.
+      // Exception: when src is being swapped, the browser fires pause+empty
+      // first; ignore that transient pause if the new src is loading.
+      if (audio.src === '' || audio.src === window.location.href) return;
+      setIsPlaying(false);
     };
     const onEnded = () => {
       const len = playlistRef.current.length;

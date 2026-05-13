@@ -120,10 +120,15 @@ export const BookReader = memo(function BookReader({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Track pending bookmark jump so chapter-restore effect can defer to it
+  const pendingJumpRef = useRef<{ chapterId: string; position: number } | null>(null);
+
   // Restore scroll position on chapter change
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
+    // If a bookmark jump was just triggered, let it set the scroll position itself
+    if (pendingJumpRef.current && pendingJumpRef.current.chapterId === chapter?.id) return;
     const restorePos = progress?.chapterId === chapter?.id ? (progress?.position ?? 0) : 0;
     if (restorePos > 0) {
       requestAnimationFrame(() => {
@@ -193,13 +198,19 @@ export const BookReader = memo(function BookReader({
   const handleJumpBookmark = useCallback((bm: BookMark) => {
     const idx = book.chapters.findIndex(c => c.id === bm.chapterId);
     if (idx < 0) return;
+    pendingJumpRef.current = { chapterId: bm.chapterId, position: bm.position };
     setChapterIdx(idx);
     setPanelOpen(false);
-    setTimeout(() => {
-      const el = contentRef.current;
-      if (!el) return;
-      el.scrollTop = (bm.position / 100) * (el.scrollHeight - el.clientHeight);
-    }, 80);
+    // Use rAF to wait for DOM update; guarded by pendingJumpRef to avoid races
+    // with the chapter-restore effect.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = contentRef.current;
+        if (!el) return;
+        el.scrollTop = (bm.position / 100) * (el.scrollHeight - el.clientHeight);
+        pendingJumpRef.current = null;
+      });
+    });
   }, [book.chapters]);
 
   if (!chapter) return null;

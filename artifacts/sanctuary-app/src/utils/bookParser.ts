@@ -59,11 +59,23 @@ const CHAPTER_RE = new RegExp(
     '|CHAPTER\\s+[\\dIVXLCDM]+',
     '|Part\\s+[\\dIVXLCDM]+',
     '|PART\\s+[\\dIVXLCDM]+',
-    '|Prologue|Epilogue|Appendix|Introduction|Preface',
-    '|[A-Z][A-Z\\s]{2,30})[^\\n]*$',  // ALL-CAPS short line
+    '|Prologue|Epilogue|Appendix|Introduction|Preface)[^\\n]*$',
   ].join(''),
   'u',
 );
+
+// Stricter ALL-CAPS heading: standalone short line, mostly letters, ≥3 chars.
+// Used as a secondary heuristic only when there are spaces (multi-word headings).
+function isAllCapsHeading(line: string): boolean {
+  if (line.length < 3 || line.length > 40) return false;
+  // Must contain at least one space (single ALL-CAPS words are too common to be reliable)
+  if (!/\s/.test(line)) return false;
+  // All non-whitespace chars must be uppercase letters or basic punctuation
+  if (!/^[A-Z][A-Z\s.,'’&-]+$/.test(line)) return false;
+  // At least 60% must be letters (avoid matching e.g. "I.   .  -")
+  const letters = (line.match(/[A-Z]/g) ?? []).length;
+  return letters / line.length >= 0.6;
+}
 
 function detectChapters(text: string): BookChapter[] {
   const lines = text.split('\n');
@@ -86,7 +98,7 @@ function detectChapters(text: string): BookChapter[] {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    if (CHAPTER_RE.test(trimmed) && trimmed.length <= 60) {
+    if ((CHAPTER_RE.test(trimmed) || isAllCapsHeading(trimmed)) && trimmed.length <= 60) {
       if (!firstChapterFound && preambleLines.some(l => l.trim())) {
         // Save preamble as a "前言" chapter
         chapters.push({ id: `ch-${idx++}`, title: '前言', content: preambleLines.join('\n').trim() });

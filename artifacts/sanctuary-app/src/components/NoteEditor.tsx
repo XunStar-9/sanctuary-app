@@ -95,7 +95,9 @@ export const NoteEditor = memo(function NoteEditor({
     if (!selection || !activeNote) return;
     const marker = MARKERS[key];
     const { newContent, newStart, newEnd } = toggleMarker(activeNote.content, selection.start, selection.end, marker);
-    onUpdateNote({ content: newContent, preview: newContent.replace(/[*_=]/g, '').substring(0, 80) });
+    const stripped = newContent.replace(/[*_=]/g, '');
+    const preview = stripped.length > 80 ? stripped.substring(0, 80) + '...' : stripped;
+    onUpdateNote({ content: newContent, preview });
     setSelection({ ...selection, start: newStart, end: newEnd });
     setTimeout(() => {
       const ta = textareaRef.current;
@@ -108,7 +110,9 @@ export const NoteEditor = memo(function NoteEditor({
   const clearFormat = useCallback(() => {
     if (!selection || !activeNote) return;
     const { newContent } = clearAllMarkers(activeNote.content, selection.start, selection.end);
-    onUpdateNote({ content: newContent, preview: newContent.replace(/[*_=]/g, '').substring(0, 80) });
+    const stripped = newContent.replace(/[*_=]/g, '');
+    const preview = stripped.length > 80 ? stripped.substring(0, 80) + '...' : stripped;
+    onUpdateNote({ content: newContent, preview });
     setSelection(null);
   }, [selection, activeNote, onUpdateNote]);
 
@@ -171,10 +175,13 @@ export const NoteEditor = memo(function NoteEditor({
             <textarea
               ref={textareaRef}
               value={activeNote.content}
-              onChange={e => onUpdateNote({
-                content: e.target.value,
-                preview: e.target.value.replace(/[*_=]/g, '').substring(0, 80) + '...',
-              })}
+              onChange={e => {
+                const text = e.target.value;
+                const stripped = text.replace(/[*_=]/g, '');
+                // Only append '...' when content actually exceeds the preview length
+                const preview = stripped.length > 80 ? stripped.substring(0, 80) + '...' : stripped;
+                onUpdateNote({ content: text, preview });
+              }}
               onMouseUp={handleSelectionEvent}
               onTouchEnd={handleSelectionEvent}
               onKeyUp={() => setSelection(null)}
