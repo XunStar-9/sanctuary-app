@@ -5,16 +5,25 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# 最小权限原则 - 仅声明工作流实际需要的权限
+permissions:
+  contents: read
+  actions: write
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Job 级别权限限制
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # pinned to v4 major version
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

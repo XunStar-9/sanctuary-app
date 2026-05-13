@@ -1,0 +1,68 @@
+# Dependabot 配置 - 自动检测依赖漏洞并创建更新 PR
+# 文档: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # npm 依赖更新 (根目录)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "chore(deps)"
+    # 忽略主要版本升级，只自动处理补丁和次要版本
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # npm 依赖更新 (api-server)
+  - package-ecosystem: "npm"
+    directory: "/artifacts/api-server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "api-server"
+    commit-message:
+      prefix: "chore(deps-api)"
+
+  # npm 依赖更新 (mockup-sandbox)
+  - package-ecosystem: "npm"
+    directory: "/artifacts/mockup-sandbox"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "mockup-sandbox"
+    commit-message:
+      prefix: "chore(deps-mockup)"
+
+  # GitHub Actions 依赖更新
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(deps-actions)"

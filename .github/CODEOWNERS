@@ -1,0 +1,22 @@
+# CODEOWNERS - 代码审查责任人配置
+# 文档: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# 当 PR 修改了匹配的文件时，对应的 owner 会被自动添加为 reviewer
+# 格式: <pattern> <owner1> <owner2> ...
+
+# 默认 owner - 所有未匹配到其他规则的文件
+*                           @XunStar-9
+
+# GitHub Actions 和 CI/CD 配置 - 需要额外审查
+.github/                    @XunStar-9
+.github/workflows/          @XunStar-9
+
+# API 服务器
+artifacts/api-server/       @XunStar-9
+
+# 前端应用 (mockup-sandbox)
+artifacts/mockup-sandbox/   @XunStar-9
+
+# 安全相关配置
+.github/dependabot.yml      @XunStar-9
+.github/CODEOWNERS          @XunStar-9
