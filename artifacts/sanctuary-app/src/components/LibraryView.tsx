@@ -67,8 +67,9 @@ const BookCard = memo(function BookCard({ book, bookmarkCount }: {
 /* ── Shelf ──────────────────────────────────────────────────────────────── */
 
 const Shelf = memo(function Shelf() {
-  const books     = useStore(booksStore, s => s.books);
-  const bookmarks = useStore(booksStore, s => s.bookmarks);
+  const books = useStore(booksStore, s => s.books);
+  // Pre-compute counts in O(bookmarks) once, instead of O(books × bookmarks) per render.
+  const countMap = useStore(booksStore, s => booksSelectors.bookmarkCountMap(s));
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const onPickFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,10 +91,9 @@ const Shelf = memo(function Shelf() {
         ) : (
           <div className="px-5 py-6">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {books.map(book => {
-                const bkCount = bookmarks.filter(b => b.bookId === book.id).length;
-                return <BookCard key={book.id} book={book} bookmarkCount={bkCount} />;
-              })}
+              {books.map(book => (
+                <BookCard key={book.id} book={book} bookmarkCount={countMap.get(book.id) ?? 0} />
+              ))}
             </div>
           </div>
         )}

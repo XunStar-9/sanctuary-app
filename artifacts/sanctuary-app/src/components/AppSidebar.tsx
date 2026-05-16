@@ -21,7 +21,7 @@ import { Slider } from '@/components/ui/slider';
 import { useStore } from '@/lib/store';
 import { notesStore, notesActions, notesSelectors } from '@/stores/notesStore';
 import { uiStore, uiActions } from '@/stores/uiStore';
-import { useAudio } from '@/hooks/useAudio';
+import { useAudioControls, useAudioSelector } from '@/hooks/useAudio';
 import { useSwipe } from '@/hooks/useSwipe';
 import { getAccentHsl } from '@/lib/types';
 import { sleepTimerStore, formatSleepCountdown } from '@/stores/sleepTimerStore';
@@ -122,7 +122,7 @@ const NotesSection = memo(function NotesSection() {
 
 /* ── Music dock ──────────────────────────────────────────────────────────── */
 
-type MusicDockProps = ReturnType<typeof useAudio> & { onOpenPlaylist: () => void };
+type MusicDockProps = { onOpenPlaylist: () => void };
 
 /**
  * Two-state music dock:
@@ -134,13 +134,20 @@ type MusicDockProps = ReturnType<typeof useAudio> & { onOpenPlaylist: () => void
  * smoothly transitions to the natural height without measuring it manually.
  */
 function MusicDock({
-  playlist, currentSong, isPlaying, isShuffle, isRepeat, volume,
-  progressPct, displayTime, displayDuration,
-  handlePlayPause, handleNext, handlePrev, handleSeek, handleVolume,
-  toggleMute, startDrag, stopDrag,
-  handleUploadClick, toggleShuffle, toggleRepeat,
   onOpenPlaylist,
 }: MusicDockProps) {
+  // Subscribe to individual audio fields for granular re-renders.
+  const playlist       = useAudioSelector(s => s.playlist);
+  const currentSong    = useAudioSelector(s => s.currentSong);
+  const isPlaying      = useAudioSelector(s => s.isPlaying);
+  const isShuffle      = useAudioSelector(s => s.isShuffle);
+  const isRepeat       = useAudioSelector(s => s.isRepeat);
+  const volume         = useAudioSelector(s => s.volume);
+  const progressPct    = useAudioSelector(s => s.progressPct);
+  const displayTime    = useAudioSelector(s => s.displayTime);
+  const displayDuration = useAudioSelector(s => s.displayDuration);
+  const { handlePlayPause, handleNext, handlePrev, handleSeek, handleVolume,
+          toggleMute, startDrag, stopDrag, handleUploadClick, toggleShuffle, toggleRepeat } = useAudioControls();
   const expanded = useStore(uiStore, s => s.musicExpanded);
   const sleepRemainingSecs   = useStore(sleepTimerStore, s => s.remainingSecs);
   const sleepTracksRemaining = useStore(sleepTimerStore, s => s.tracksRemaining);
@@ -383,11 +390,13 @@ function MusicDock({
 type PlaylistPanelProps = {
   open: boolean;
   onClose: () => void;
-  audio: ReturnType<typeof useAudio>;
 };
 
-function PlaylistPanel({ open, onClose, audio }: PlaylistPanelProps) {
-  const { playlist, currentSongIndex, isPlaying, handleSelectSong, handleRemoveSong, handleUploadClick } = audio;
+function PlaylistPanel({ open, onClose }: PlaylistPanelProps) {
+  const playlist         = useAudioSelector(s => s.playlist);
+  const currentSongIndex = useAudioSelector(s => s.currentSongIndex);
+  const isPlaying        = useAudioSelector(s => s.isPlaying);
+  const { handleSelectSong, handleRemoveSong, handleUploadClick } = useAudioControls();
   return (
     <>
       <div
@@ -492,7 +501,7 @@ function PlaylistPanel({ open, onClose, audio }: PlaylistPanelProps) {
 
 export const AppSidebar = memo(function AppSidebar() {
   const open = useStore(uiStore, s => s.sidebarOpen);
-  const audio = useAudio();
+  const controls = useAudioControls();
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const closePlaylist = useCallback(() => setPlaylistOpen(false), []);
   const openPlaylist = useCallback(() => setPlaylistOpen(true), []);
@@ -507,12 +516,12 @@ export const AppSidebar = memo(function AppSidebar() {
       )}
     >
       <input
-        ref={audio.fileInputRef}
+        ref={controls.fileInputRef}
         type="file"
         accept="audio/*"
         multiple
         className="hidden"
-        onChange={audio.handleFileChange}
+        onChange={controls.handleFileChange}
       />
 
       <div className="flex items-center justify-between px-5 pt-6 pb-4 shrink-0">
@@ -531,7 +540,7 @@ export const AppSidebar = memo(function AppSidebar() {
       </div>
 
       {/* Music dock pinned above the footer. */}
-      <MusicDock {...audio} onOpenPlaylist={openPlaylist} />
+      <MusicDock onOpenPlaylist={openPlaylist} />
 
       {/* Footer */}
       <div className="px-5 py-3 border-t border-border/20 shrink-0 flex items-center justify-between">
@@ -551,7 +560,7 @@ export const AppSidebar = memo(function AppSidebar() {
         </button>
       </div>
 
-      <PlaylistPanel open={playlistOpen} onClose={closePlaylist} audio={audio} />
+      <PlaylistPanel open={playlistOpen} onClose={closePlaylist} />
     </aside>
   );
 });
