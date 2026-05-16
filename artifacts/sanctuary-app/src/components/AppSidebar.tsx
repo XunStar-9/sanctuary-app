@@ -1,17 +1,20 @@
 /**
- * AppSidebar — left drawer with notes list + mini music player.
+ * AppSidebar — left drawer with notes list + a docked mini music player.
  *
- * Visual layout is identical to the previous implementation. The big change
- * is that the component no longer accepts 30+ props: it subscribes to the
- * notes store, audio engine, and ui store directly. The internal layout was
- * also lightly restructured — the playlist drawer and the notes/music sections
- * are now separate sub-components, each rendering only what it needs.
+ * Layout shell (top → bottom):
+ *   1. Header           ─ logo + close button
+ *   2. Notes (scroll)   ─ takes all remaining vertical space, scrollable
+ *   3. Music dock       ─ docked above the footer; collapsible
+ *   4. Footer           ─ Settings + Library buttons
+ *
+ * The component subscribes to notes/ui stores and the audio engine directly.
  */
 
 import { useState, useCallback, memo } from 'react';
 import {
   X, Plus, Search, Music, Shuffle, SkipBack, Play, Pause, SkipForward,
   Repeat, Upload, Settings, BookOpen, ListMusic, Trash2, Volume2, VolumeX,
+  ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
@@ -49,7 +52,7 @@ const NotesSection = memo(function NotesSection() {
   }, []);
 
   return (
-    <div className="px-5 mb-1">
+    <div className="px-5 pt-1 pb-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-sans tracking-[0.15em] uppercase text-muted-foreground/60">Notes</span>
         <button
@@ -78,7 +81,7 @@ const NotesSection = memo(function NotesSection() {
         )}
       </div>
 
-      <div className="flex flex-col gap-0.5 mb-4 -mx-2">
+      <div className="flex flex-col gap-0.5 -mx-2">
         {filteredNotes.map(note => (
           <div
             key={note.id}
@@ -114,114 +117,200 @@ const NotesSection = memo(function NotesSection() {
   );
 });
 
-/* ── Music mini-player ──────────────────────────────────────────────────── */
+/* ── Music dock ──────────────────────────────────────────────────────────── */
 
-type MusicMiniProps = ReturnType<typeof useAudio> & { onOpenPlaylist: () => void };
+type MusicDockProps = ReturnType<typeof useAudio> & { onOpenPlaylist: () => void };
 
-function MusicMini({
+/**
+ * Two-state music dock:
+ *  - collapsed: single-row card showing cover, title, play/pause, expand chevron.
+ *    A 1-px progress strip across the top of the dock keeps the playhead visible.
+ *  - expanded:  full controls (transport, seek, volume).
+ *
+ * The expand/collapse animation uses `grid-template-rows: 0fr ↔ 1fr`, which
+ * smoothly transitions to the natural height without measuring it manually.
+ */
+function MusicDock({
   playlist, currentSong, isPlaying, isShuffle, isRepeat, volume,
   progressPct, displayTime, displayDuration,
   handlePlayPause, handleNext, handlePrev, handleSeek, handleVolume,
   toggleMute, startDrag, stopDrag,
   handleUploadClick, toggleShuffle, toggleRepeat,
   onOpenPlaylist,
-}: MusicMiniProps) {
-  return (
-    <>
-      <div className="px-5 mb-3 flex items-center justify-between">
-        <span className="text-[10px] font-sans tracking-[0.15em] uppercase text-muted-foreground/60">Music</span>
+}: MusicDockProps) {
+  const expanded = useStore(uiStore, s => s.musicExpanded);
+
+  // Empty state: single compact row, dock-height stays minimal.
+  if (playlist.length === 0) {
+    return (
+      <div className="border-t border-border/30 px-5 py-2.5 shrink-0 flex items-center gap-2">
+        <Music className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+        <span className="text-[12px] font-sans text-muted-foreground/50 flex-1 truncate">No songs yet</span>
         <button
-          onClick={onOpenPlaylist}
-          className={cn(BTN_ICON, 'w-6 h-6 text-muted-foreground hover:text-foreground hover:bg-muted/50')}
-          title="Playlist"
+          onClick={handleUploadClick}
+          className={cn(BTN_BASE, 'text-[11px] font-sans text-primary/70 hover:text-primary flex items-center gap-1')}
         >
-          <ListMusic className="w-3.5 h-3.5" />
+          <Upload className="w-3 h-3" /> Upload
         </button>
       </div>
+    );
+  }
 
-      <div className="px-5 mb-4">
-        {playlist.length === 0 ? (
-          <div className="flex flex-col items-center py-4 gap-2">
-            <Music className="w-5 h-5 text-muted-foreground/25" />
-            <p className="text-[12px] font-sans text-muted-foreground/40">No songs yet</p>
-            <button
-              onClick={handleUploadClick}
-              className={cn(BTN_BASE, 'text-[11px] font-sans text-primary/70 hover:text-primary flex items-center gap-1')}
-            >
-              <Upload className="w-3 h-3" /> Upload music
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-3 mb-3">
-              <div className={cn(
-                'w-10 h-10 rounded-lg shrink-0 bg-gradient-to-br flex items-center justify-center relative overflow-hidden',
-                currentSong?.gradient ?? 'from-muted to-muted/40',
-              )}>
-                {currentSong?.isUploaded && <Music className="w-4 h-4 text-white/50" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium truncate text-foreground">{currentSong?.title ?? '—'}</p>
-                <p className="text-[11px] font-sans text-muted-foreground truncate">{currentSong?.artist ?? ''}</p>
+  const stopProp = (e: React.MouseEvent) => e.stopPropagation();
+
+  return (
+    <div className="border-t border-border/30 shrink-0 select-none">
+      {/* Always-visible thin progress strip — visual continuity across collapse. */}
+      <div className="h-[2px] bg-muted/30">
+        <div
+          className="h-full bg-primary/60 transition-[width] duration-200"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+
+      {/* Header row (always visible). Tapping anywhere on it toggles expanded. */}
+      <button
+        onClick={uiActions.toggleMusic}
+        className="w-full px-5 py-2.5 flex items-center gap-3 hover:bg-muted/30 active:bg-muted/50 transition-colors text-left"
+        aria-expanded={expanded}
+        aria-label={expanded ? 'Collapse music player' : 'Expand music player'}
+      >
+        <div className={cn(
+          'w-9 h-9 rounded-lg shrink-0 bg-gradient-to-br flex items-center justify-center relative overflow-hidden',
+          currentSong?.gradient ?? 'from-muted to-muted/40',
+        )}>
+          {isPlaying ? (
+            <div className="flex items-end gap-0.5">
+              <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '8px',  animationDelay: '0ms'   }} />
+              <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '12px', animationDelay: '150ms' }} />
+              <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '8px',  animationDelay: '300ms' }} />
+            </div>
+          ) : currentSong?.isUploaded ? (
+            <Music className="w-4 h-4 text-white/55" />
+          ) : null}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium truncate text-foreground">{currentSong?.title ?? '—'}</p>
+          <p className="text-[11px] font-sans text-muted-foreground truncate">{currentSong?.artist ?? ''}</p>
+        </div>
+
+        {/* Quick play/pause (works without expanding). */}
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={e => { stopProp(e); handlePlayPause(); }}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { stopProp(e); handlePlayPause(); } }}
+          className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all duration-150 hover:scale-105 active:scale-90 shrink-0"
+        >
+          {isPlaying
+            ? <Pause className="w-3.5 h-3.5 fill-current" />
+            : <Play  className="w-3.5 h-3.5 fill-current ml-0.5" />}
+        </span>
+
+        <ChevronUp
+          className={cn(
+            'w-3.5 h-3.5 text-muted-foreground/60 shrink-0 transition-transform duration-200',
+            expanded ? 'rotate-0' : 'rotate-180',
+          )}
+        />
+      </button>
+
+      {/* Expanded controls — uses the grid-rows trick for smooth height anim. */}
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
+          expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="px-5 pt-1 pb-3 border-t border-border/20">
+
+            {/* Seek bar with timestamps */}
+            <div className="pt-2.5">
+              <Slider
+                value={[progressPct]}
+                max={100}
+                step={0.1}
+                onValueChange={handleSeek}
+                onPointerDown={startDrag}
+                onPointerUp={stopDrag}
+              />
+              <div className="flex justify-between text-[10px] font-sans text-muted-foreground mt-1 mb-2.5 tabular-nums">
+                <span>{displayTime}</span>
+                <span>{displayDuration}</span>
               </div>
             </div>
 
-            <Slider
-              value={[progressPct]}
-              max={100}
-              step={0.1}
-              className="mb-1"
-              onValueChange={handleSeek}
-              onPointerDown={startDrag}
-              onPointerUp={stopDrag}
-            />
-            <div className="flex justify-between text-[10px] font-sans text-muted-foreground mb-3">
-              <span>{displayTime}</span>
-              <span>{displayDuration}</span>
-            </div>
-
-            <div className="flex items-center justify-center gap-4 mb-3">
+            {/* Transport row */}
+            <div className="flex items-center justify-center gap-4 mb-2.5">
               <button
                 onClick={toggleShuffle}
+                title="Shuffle"
                 className={cn(BTN_BASE, isShuffle ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
               >
                 <Shuffle className="w-3.5 h-3.5" />
               </button>
-              <button onClick={handlePrev} className={cn(BTN_BASE, 'text-foreground/70 hover:text-foreground')}>
+              <button onClick={handlePrev} title="Previous" className={cn(BTN_BASE, 'text-foreground/70 hover:text-foreground')}>
                 <SkipBack className="w-4 h-4 fill-current" />
               </button>
               <button
                 onClick={handlePlayPause}
+                title={isPlaying ? 'Pause' : 'Play'}
                 className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all duration-150 hover:scale-105 active:scale-90"
               >
                 {isPlaying
                   ? <Pause className="w-4 h-4 fill-current" />
                   : <Play  className="w-4 h-4 fill-current ml-0.5" />}
               </button>
-              <button onClick={handleNext} className={cn(BTN_BASE, 'text-foreground/70 hover:text-foreground')}>
+              <button onClick={handleNext} title="Next" className={cn(BTN_BASE, 'text-foreground/70 hover:text-foreground')}>
                 <SkipForward className="w-4 h-4 fill-current" />
               </button>
               <button
                 onClick={toggleRepeat}
+                title="Repeat"
                 className={cn(BTN_BASE, isRepeat ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
               >
                 <Repeat className="w-3.5 h-3.5" />
               </button>
             </div>
 
+            {/* Volume + secondary actions */}
             <div className="flex items-center gap-2">
               <button
                 onClick={toggleMute}
+                title={volume === 0 ? 'Unmute' : 'Mute'}
                 className={cn(BTN_BASE, 'text-muted-foreground/60 hover:text-foreground shrink-0')}
               >
                 {volume === 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
               </button>
-              <Slider value={[volume * 100]} max={100} step={1} className="flex-1" onValueChange={handleVolume} />
+              <Slider
+                value={[volume * 100]}
+                max={100}
+                step={1}
+                className="flex-1"
+                onValueChange={handleVolume}
+              />
+              <button
+                onClick={onOpenPlaylist}
+                title="Playlist"
+                className={cn(BTN_ICON, 'w-7 h-7 text-muted-foreground/70 hover:text-foreground hover:bg-muted/50 shrink-0')}
+              >
+                <ListMusic className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handleUploadClick}
+                title="Upload music"
+                className={cn(BTN_ICON, 'w-7 h-7 text-muted-foreground/70 hover:text-foreground hover:bg-muted/50 shrink-0')}
+              >
+                <Upload className="w-3.5 h-3.5" />
+              </button>
             </div>
-          </>
-        )}
+
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -372,13 +461,16 @@ export const AppSidebar = memo(function AppSidebar() {
         </button>
       </div>
 
+      {/* Notes scroll region — takes all remaining space above the docked music. */}
       <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain">
         <NotesSection />
-        <div className="mx-5 border-t border-border/30 mb-4" />
-        <MusicMini {...audio} onOpenPlaylist={openPlaylist} />
       </div>
 
-      <div className="px-5 py-4 border-t border-border/20 shrink-0 flex items-center justify-between">
+      {/* Music dock pinned above the footer. */}
+      <MusicDock {...audio} onOpenPlaylist={openPlaylist} />
+
+      {/* Footer */}
+      <div className="px-5 py-3 border-t border-border/20 shrink-0 flex items-center justify-between">
         <button
           onClick={uiActions.openSettings}
           className={cn(BTN_BASE, 'flex items-center gap-2 text-muted-foreground/50 hover:text-muted-foreground')}
