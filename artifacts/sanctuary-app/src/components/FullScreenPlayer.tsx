@@ -2,55 +2,58 @@
  * FullScreenPlayer — full-bleed playing-now overlay.
  *
  * Mounted as a top-level overlay when `uiStore.fullscreenPlayerOpen` is true.
- * The component subscribes to `audioEngine` (via useAudio) and `uiStore` directly.
  *
  * Layout (top → bottom):
- *   1. Header bar     — Close + title chip + open-playlist
+ *   1. Header bar     — Close + title chip + Upload
  *   2. Backdrop tint  — full-bleed accent gradient based on current song
  *   3. Cover artwork  — large square, 70% of width, max 320px
  *   4. Title & artist
- *   5. Seek bar with timestamps
+ *   5. Seek bar       — with timestamps (isolated subscriber)
  *   6. Transport row  — shuffle / prev / big play-pause / next / repeat
  *   7. Volume row     — mute toggle + slider
- *   8. Tabs           — Queue | Recent (Recent is a placeholder until task 5a)
+ *   8. Tabs           — Queue | Recent
+ *
+ * Performance notes:
+ *  - Subscriptions are split: the seek bar gets its own component so the
+ *    rest of the player doesn't re-render on every `timeupdate` (~4×/sec).
+ *  - Queue/Recent subscribe only to the data they render (no time fields).
  *
  * Interactions:
- *   - Swipe down on the upper half of the page → close
- *   - Swipe left/right anywhere on the cover → next/prev
- *   - Click backdrop never closes (the page is full overlay; only swipe / X closes)
+ *  - Esc / X / Swipe-down on top half / swipe-down on cover → close
+ *  - Swipe left/right on cover → next/prev
+ *  - Click on backdrop never closes (only explicit dismiss).
  */
 
-import { useState, memo, useCallback } from 'react';
+import { useState, useEffect, memo, useCallback } from 'react';
 import {
   ChevronDown, Music, Shuffle, SkipBack, Play, Pause, SkipForward, Repeat,
   Volume2, VolumeX, ListMusic, Upload, X, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
-import { useAudio } from '@/hooks/useAudio';
+import { useAudioControls, useAudioSelector } from '@/hooks/useAudio';
 import { useSwipe } from '@/hooks/useSwipe';
 import { useStore } from '@/lib/store';
 import { uiActions } from '@/stores/uiStore';
 import { historyStore, historyActions } from '@/stores/historyStore';
+import { audioEngine } from '@/stores/audioEngine';
 import { getAccentHsl } from '@/lib/types';
 
 const BTN_BASE = 'transition-all duration-150 active:scale-90';
 const BTN_ICON = 'flex items-center justify-center rounded-full transition-all duration-150 active:scale-90';
 
+type TabKey = 'queue' | 'recent';
+
 /* ── Cover with horizontal swipe → prev/next + vertical swipe → close ────── */
 
-function Cover({
-  song, isPlaying, onPrev, onNext, onClose,
-}: {
-  song: ReturnType<typeof useAudio>['currentSong'];
-  isPlaying: boolean;
-  onPrev: () => void;
-  onNext: () => void;
-  onClose: () => void;
-}) {
+const Cover = memo(function Cover({ onClose }: { onClose: () => void }) {
+  const song      = useAudioSelector(s => s.currentSong);
+  const isPlaying = useAudioSelector(s => s.isPlaying);
+  const { handleNext, handlePrev } = useAudioControls();
+
   const swipe = useSwipe({
-    onSwipeLeft:  onNext,
-    onSwipeRight: onPrev,
+    onSwipeLeft:  handleNext,
+    onSwipeRight: handlePrev,
     onSwipeDown:  onClose,
     thresholdY: 80, // a bit higher so accidental scrolls don't dismiss
   });
@@ -77,14 +80,12 @@ function Cover({
             : 'none',
         }}
       >
-        {/* Center icon when no real artwork is available */}
         {song?.isUploaded ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <Music className="w-16 h-16 text-white/40" />
           </div>
         ) : null}
 
-        {/* Subtle pulse overlay while playing */}
         {isPlaying && (
           <div
             className="absolute inset-0 pointer-events-none"
@@ -98,14 +99,119 @@ function Cover({
       </div>
     </div>
   );
-}
+});
+
+/* ── Title text (separate so the metadata row doesn't re-render on time) ── */
+
+const NowPlayingText = memo(function NowPlayingText() {
+  const song = useAudioSelector(s => s.currentSong);
+  return (
+    <div className="mt-7 text-center max-w-full px-4">
+      <p className="text-[20px] font-serif font-medium text-foreground truncate">
+        {song?.title ?? '—'}
+      </p>
+      <p className="text-[13px] font-sans text-muted-foreground mt-1 truncate">
+        {song?.artist ?? ''}
+      </p>
+    </div>
+  );
+});
+
+/* ── Seek bar (isolated — re-renders on every timeupdate) ───────────────── */
+
+const SeekBar = memo(function SeekBar() {
+  const progressPct     = useAudioSelector(s => s.progressPct);
+  const displayTime     = useAudioSelector(s => s.displayTime);
+  const displayDuration = useAudioSelector(s => s.displayDuration);
+  const { handleSeek, startDrag, stopDrag } = useAudioControls();
+  return (
+    <>
+      <Slider
+        value={[progressPct]}
+        max={100}
+        step={0.1}
+        onValueChange={handleSeek}
+        onPointerDown={startDrag}
+        onPointerUp={stopDrag}
+      />
+      <div className="flex justify-between text-[11px] font-sans text-muted-foreground mt-1.5 mb-4 tabular-nums">
+        <span>{displayTime}</span>
+        <span>{displayDuration}</span>
+      </div>
+    </>
+  );
+});
+
+/* ── Transport row ──────────────────────────────────────────────────────── */
+
+const Transport = memo(function Transport() {
+  const isPlaying = useAudioSelector(s => s.isPlaying);
+  const isShuffle = useAudioSelector(s => s.isShuffle);
+  const isRepeat  = useAudioSelector(s => s.isRepeat);
+  const { handlePlayPause, handleNext, handlePrev, toggleShuffle, toggleRepeat } = useAudioControls();
+  return (
+    <div className="flex items-center justify-center gap-6 mb-4">
+      <button
+        onClick={toggleShuffle}
+        title="Shuffle"
+        className={cn(BTN_BASE, isShuffle ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
+      >
+        <Shuffle className="w-4 h-4" />
+      </button>
+      <button onClick={handlePrev} title="Previous" className={cn(BTN_BASE, 'text-foreground/80 hover:text-foreground')}>
+        <SkipBack className="w-6 h-6 fill-current" />
+      </button>
+      <button
+        onClick={handlePlayPause}
+        title={isPlaying ? 'Pause' : 'Play'}
+        className="w-14 h-14 rounded-full text-primary-foreground flex items-center justify-center shadow-lg transition-all duration-150 hover:scale-105 active:scale-90"
+        style={{ background: 'hsl(var(--song-accent))' }}
+      >
+        {isPlaying
+          ? <Pause className="w-5 h-5 fill-current" />
+          : <Play  className="w-5 h-5 fill-current ml-0.5" />}
+      </button>
+      <button onClick={handleNext} title="Next" className={cn(BTN_BASE, 'text-foreground/80 hover:text-foreground')}>
+        <SkipForward className="w-6 h-6 fill-current" />
+      </button>
+      <button
+        onClick={toggleRepeat}
+        title="Repeat"
+        className={cn(BTN_BASE, isRepeat ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
+      >
+        <Repeat className="w-4 h-4" />
+      </button>
+    </div>
+  );
+});
+
+/* ── Volume row ─────────────────────────────────────────────────────────── */
+
+const VolumeRow = memo(function VolumeRow() {
+  const volume = useAudioSelector(s => s.volume);
+  const { toggleMute, handleVolume } = useAudioControls();
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <button
+        onClick={toggleMute}
+        title={volume === 0 ? 'Unmute' : 'Mute'}
+        className={cn(BTN_BASE, 'text-muted-foreground/70 hover:text-foreground shrink-0')}
+      >
+        {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+      </button>
+      <Slider value={[volume * 100]} max={100} step={1} className="flex-1" onValueChange={handleVolume} />
+    </div>
+  );
+});
 
 /* ── Tabs (Queue + Recent) ───────────────────────────────────────────────── */
 
-type TabKey = 'queue' | 'recent';
+const QueueTab = memo(function QueueTab() {
+  const playlist         = useAudioSelector(s => s.playlist);
+  const currentSongIndex = useAudioSelector(s => s.currentSongIndex);
+  const isPlaying        = useAudioSelector(s => s.isPlaying);
+  const { handleSelectSong, handleRemoveSong } = useAudioControls();
 
-function QueueTab({ audio }: { audio: ReturnType<typeof useAudio> }) {
-  const { playlist, currentSongIndex, isPlaying, handleSelectSong, handleRemoveSong } = audio;
   if (playlist.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
@@ -159,11 +265,11 @@ function QueueTab({ audio }: { audio: ReturnType<typeof useAudio> }) {
       ))}
     </div>
   );
-}
+});
 
-const RecentTab = memo(function RecentTab({ audio }: { audio: ReturnType<typeof useAudio> }) {
+const RecentTab = memo(function RecentTab() {
   const entries = useStore(historyStore, s => s.entries);
-  const { playlist, handleSelectSong } = audio;
+  const { handleSelectSong } = useAudioControls();
 
   if (entries.length === 0) {
     return (
@@ -179,8 +285,10 @@ const RecentTab = memo(function RecentTab({ audio }: { audio: ReturnType<typeof 
 
   // Tap a recent entry → if its song is still in the current playlist, jump to
   // it; otherwise gracefully no-op (the song may have been removed).
+  // We read the playlist imperatively so this row doesn't re-render on every
+  // timeupdate; the playlist rarely changes.
   const handlePick = (songId: string) => {
-    const idx = playlist.findIndex(s => s.id === songId);
+    const idx = audioEngine.getSnapshot().playlist.findIndex(s => s.id === songId);
     if (idx >= 0) handleSelectSong(idx);
   };
 
@@ -198,52 +306,43 @@ const RecentTab = memo(function RecentTab({ audio }: { audio: ReturnType<typeof 
         </button>
       </div>
 
-      {entries.map(entry => {
-        const stillInPlaylist = playlist.some(s => s.id === entry.songId);
-        return (
-          <div
-            key={entry.songId}
-            onClick={() => handlePick(entry.songId)}
-            className={cn(
-              'flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150 group',
-              stillInPlaylist
-                ? 'cursor-pointer hover:bg-muted/40 active:bg-muted/60'
-                : 'opacity-60 cursor-default',
-            )}
-            title={stillInPlaylist ? '' : 'No longer in playlist'}
-          >
-            <div className={cn('w-9 h-9 rounded-md shrink-0 bg-gradient-to-br relative overflow-hidden', entry.gradient)}>
-              {entry.isUploaded ? (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Music className="w-4 h-4 text-white/55" />
-                </div>
-              ) : null}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium truncate text-foreground/90 group-hover:text-foreground">
-                {entry.title}
-              </p>
-              <p className="text-[11px] font-sans text-muted-foreground truncate">
-                {entry.artist} · {formatRelativeTime(entry.playedAt)}
-              </p>
-            </div>
-            <button
-              onClick={e => { e.stopPropagation(); historyActions.remove(entry.songId); }}
-              className="p-1 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-muted/50 transition-all duration-150 active:scale-90"
-              title="Remove from history"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+      {entries.map(entry => (
+        <div
+          key={entry.songId}
+          onClick={() => handlePick(entry.songId)}
+          className="flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150 group cursor-pointer hover:bg-muted/40 active:bg-muted/60"
+        >
+          <div className={cn('w-9 h-9 rounded-md shrink-0 bg-gradient-to-br relative overflow-hidden', entry.gradient)}>
+            {entry.isUploaded ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Music className="w-4 h-4 text-white/55" />
+              </div>
+            ) : null}
           </div>
-        );
-      })}
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-medium truncate text-foreground/90 group-hover:text-foreground">
+              {entry.title}
+            </p>
+            <p className="text-[11px] font-sans text-muted-foreground truncate">
+              {entry.artist} · {formatRelativeTime(entry.playedAt)}
+            </p>
+          </div>
+          <button
+            onClick={e => { e.stopPropagation(); historyActions.remove(entry.songId); }}
+            className="p-1 rounded-md text-muted-foreground/40 hover:text-destructive hover:bg-muted/50 transition-all duration-150 active:scale-90"
+            title="Remove from history"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      ))}
     </div>
   );
 });
 
 /**
  * Compact relative-time formatter: "just now", "5m", "2h", "3d", or fallback
- * to a short date. Avoids pulling in date-fns since this is the only consumer.
+ * to a short date.
  */
 function formatRelativeTime(ts: number): string {
   const sec = Math.max(0, (Date.now() - ts) / 1000);
@@ -254,60 +353,59 @@ function formatRelativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString();
 }
 
+/* ── Backdrop tint (separate so it only re-renders on song change) ──────── */
+
+const BackdropTint = memo(function BackdropTint() {
+  const gradient = useAudioSelector(s => s.currentSong?.gradient);
+  const accentHsl = getAccentHsl(gradient);
+  return (
+    <div
+      aria-hidden
+      className="absolute inset-0 pointer-events-none"
+      style={{
+        background: `radial-gradient(120% 80% at 50% 0%, hsl(${accentHsl ?? 'var(--primary)'} / 0.18) 0%, transparent 60%)`,
+      }}
+    />
+  );
+});
+
 /* ── FullScreenPlayer entry ─────────────────────────────────────────────── */
 
 export const FullScreenPlayer = memo(function FullScreenPlayer() {
-  const audio = useAudio();
-  const {
-    currentSong, isPlaying, isShuffle, isRepeat, volume,
-    progressPct, displayTime, displayDuration,
-    handlePlayPause, handleNext, handlePrev, handleSeek, handleVolume,
-    toggleMute, startDrag, stopDrag,
-    handleUploadClick, toggleShuffle, toggleRepeat,
-    fileInputRef, handleFileChange,
-  } = audio;
-
   const [tab, setTab] = useState<TabKey>('queue');
 
-  const accentHsl = getAccentHsl(currentSong?.gradient);
-  const rootStyle = {
-    '--song-accent': accentHsl ?? 'var(--primary)',
-  } as React.CSSProperties;
+  // Read accent for the play button styling. Subscribing to currentSong (not
+  // the full snapshot) keeps this re-render limited to song transitions.
+  const accentHsl = useAudioSelector(s => getAccentHsl(s.currentSong?.gradient) ?? 'var(--primary)');
+  const rootStyle = { '--song-accent': accentHsl } as React.CSSProperties;
+
+  const close = useCallback(() => uiActions.closeFullscreenPlayer(), []);
+  const { handleUploadClick } = useAudioControls();
 
   // Top-bar swipe-down also dismisses, so the user has multiple ways out.
   const topSwipe = useSwipe({
-    onSwipeDown: () => uiActions.closeFullscreenPlayer(),
+    onSwipeDown: close,
     thresholdY: 50,
-    horizontalOnly: false,
   });
 
-  // Body click on backdrop does nothing — only explicit close.
-  const close = useCallback(() => uiActions.closeFullscreenPlayer(), []);
+  // Esc key closes the player.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [close]);
 
   return (
     <div
       className="fixed inset-0 z-[60] flex flex-col bg-background animate-in fade-in slide-in-from-bottom-8 duration-300"
       style={rootStyle}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Now playing"
     >
-      {/* Hidden re-mount of file input so Upload action in this view works. */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*"
-        multiple
-        className="hidden"
-        onChange={handleFileChange}
-      />
-
-      {/* Backdrop tint */}
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(120% 80% at 50% 0%, hsl(var(--song-accent) / 0.18) 0%, transparent 60%)',
-        }}
-      />
+      <BackdropTint />
 
       {/* Top bar — swipe down here to close. */}
       <div
@@ -338,112 +436,31 @@ export const FullScreenPlayer = memo(function FullScreenPlayer() {
 
       {/* Cover */}
       <div className="relative z-10 flex flex-col items-center pt-4 pb-6 px-6">
-        <Cover
-          song={currentSong}
-          isPlaying={isPlaying}
-          onPrev={handlePrev}
-          onNext={handleNext}
-          onClose={close}
-        />
-
-        <div className="mt-7 text-center max-w-full px-4">
-          <p className="text-[20px] font-serif font-medium text-foreground truncate">
-            {currentSong?.title ?? '—'}
-          </p>
-          <p className="text-[13px] font-sans text-muted-foreground mt-1 truncate">
-            {currentSong?.artist ?? ''}
-          </p>
-        </div>
+        <Cover onClose={close} />
+        <NowPlayingText />
       </div>
 
       {/* Seek + transport + volume */}
       <div className="relative z-10 px-8 shrink-0">
-        <Slider
-          value={[progressPct]}
-          max={100}
-          step={0.1}
-          onValueChange={handleSeek}
-          onPointerDown={startDrag}
-          onPointerUp={stopDrag}
-        />
-        <div className="flex justify-between text-[11px] font-sans text-muted-foreground mt-1.5 mb-4 tabular-nums">
-          <span>{displayTime}</span>
-          <span>{displayDuration}</span>
-        </div>
-
-        <div className="flex items-center justify-center gap-6 mb-4">
-          <button
-            onClick={toggleShuffle}
-            title="Shuffle"
-            className={cn(BTN_BASE, isShuffle ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
-          >
-            <Shuffle className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handlePrev}
-            title="Previous"
-            className={cn(BTN_BASE, 'text-foreground/80 hover:text-foreground')}
-          >
-            <SkipBack className="w-6 h-6 fill-current" />
-          </button>
-          <button
-            onClick={handlePlayPause}
-            title={isPlaying ? 'Pause' : 'Play'}
-            className="w-14 h-14 rounded-full text-primary-foreground flex items-center justify-center shadow-lg transition-all duration-150 hover:scale-105 active:scale-90"
-            style={{ background: 'hsl(var(--song-accent))' }}
-          >
-            {isPlaying
-              ? <Pause className="w-5 h-5 fill-current" />
-              : <Play  className="w-5 h-5 fill-current ml-0.5" />}
-          </button>
-          <button
-            onClick={handleNext}
-            title="Next"
-            className={cn(BTN_BASE, 'text-foreground/80 hover:text-foreground')}
-          >
-            <SkipForward className="w-6 h-6 fill-current" />
-          </button>
-          <button
-            onClick={toggleRepeat}
-            title="Repeat"
-            className={cn(BTN_BASE, isRepeat ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
-          >
-            <Repeat className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 mb-2">
-          <button
-            onClick={toggleMute}
-            title={volume === 0 ? 'Unmute' : 'Mute'}
-            className={cn(BTN_BASE, 'text-muted-foreground/70 hover:text-foreground shrink-0')}
-          >
-            {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-          <Slider
-            value={[volume * 100]}
-            max={100}
-            step={1}
-            className="flex-1"
-            onValueChange={handleVolume}
-          />
-        </div>
+        <SeekBar />
+        <Transport />
+        <VolumeRow />
       </div>
 
       {/* Tabs */}
       <div className="relative z-10 mt-3 flex-1 min-h-0 flex flex-col">
         <div className="flex items-center justify-center gap-1 px-5 shrink-0">
           <div className="flex bg-muted/40 rounded-full p-0.5">
-            <TabBtn id="queue" active={tab === 'queue'} onClick={() => setTab('queue')}>
+            <TabBtn active={tab === 'queue'} onClick={() => setTab('queue')}>
               <ListMusic className="w-3.5 h-3.5" /> Queue
             </TabBtn>
-            <TabBtn id="recent" active={tab === 'recent'} onClick={() => setTab('recent')}>
+            <TabBtn active={tab === 'recent'} onClick={() => setTab('recent')}>
               Recent
             </TabBtn>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto overscroll-contain mt-3">
-          {tab === 'queue' ? <QueueTab audio={audio} /> : <RecentTab audio={audio} />}
+          {tab === 'queue' ? <QueueTab /> : <RecentTab />}
         </div>
       </div>
     </div>
@@ -453,9 +470,8 @@ export const FullScreenPlayer = memo(function FullScreenPlayer() {
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 function TabBtn({
-  id, active, onClick, children,
+  active, onClick, children,
 }: {
-  id: TabKey;
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
@@ -465,7 +481,6 @@ function TabBtn({
       onClick={onClick}
       role="tab"
       aria-selected={active}
-      aria-controls={`fsplayer-tab-${id}`}
       className={cn(
         'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[12px] font-sans transition-all duration-150 active:scale-95',
         active

@@ -87,6 +87,7 @@ export const SelectionToolbar = memo(function SelectionToolbar({
   return (
     <div
       ref={ref}
+      data-selection-toolbar
       className="fixed z-[200] flex items-center gap-0.5 px-1.5 py-1.5 rounded-2xl bg-card/95 backdrop-blur-xl border border-border/50 shadow-xl"
       style={{ left, top }}
     >

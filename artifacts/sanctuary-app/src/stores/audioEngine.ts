@@ -71,6 +71,9 @@ export type AudioSnapshot = {
   currentTime: number;
   duration: number;
   isDragging: boolean;
+  /** Set when the engine has given up on a track after MAX_RETRY attempts.
+   *  Cleared on next successful play / song change. UI can surface this. */
+  errorMessage: string | null;
   /* derived */
   progressPct: number;
   displayTime: string;
@@ -101,6 +104,8 @@ export class AudioEngine {
   private currentTime = 0;
   private duration = 0;
   private isDragging = false;
+  /** Set when retries are exhausted. Cleared on next song / next successful play. */
+  private errorMessage: string | null = null;
   /** Songs already counted toward listening-history for the current session.
    *  Reset on advance/select so re-listening to the same track later still
    *  bubbles it back to the top of the history. */
@@ -167,6 +172,7 @@ export class AudioEngine {
       currentTime: this.currentTime,
       duration: this.duration,
       isDragging: this.isDragging,
+      errorMessage: this.errorMessage,
       progressPct: dur ? (this.currentTime / dur) * 100 : 0,
       displayTime: secsToString(this.currentTime),
       displayDuration: song?.src && this.duration > 0
@@ -180,14 +186,30 @@ export class AudioEngine {
   private async loadAudioBlobs() {
     const meta = loadPlaylistMeta();
     if (!meta.length) return;
-    const restored: Song[] = [];
+    const restoredById = new Map<string, Song>();
     for (const m of meta) {
       const blobUrl = await loadAudioFile(m.id);
-      restored.push({ ...m, src: blobUrl ?? undefined });
+      restoredById.set(m.id, { ...m, src: blobUrl ?? undefined });
     }
-    // Re-run on each notify: keep defaults, replace uploaded entries.
-    const defaults = this.playlist.filter(s => !s.isUploaded);
-    this.playlist = [...defaults, ...restored];
+    // Merge in-place: replace any uploaded entry whose id was persisted, leave
+    // other uploaded entries (added during hydration) untouched.
+    let changed = false;
+    const next = this.playlist.map(s => {
+      if (!s.isUploaded) return s;
+      const restored = restoredById.get(s.id);
+      if (!restored) return s;
+      changed = true;
+      return restored;
+    });
+    if (!changed) return;
+    this.playlist = next;
+    // If the active song was the placeholder for a persisted track and it now
+    // has a real src, attach it so play() works without re-selecting.
+    const cur = this.playlist[this.currentSongIndex];
+    if (cur?.src && this.el.src === '') {
+      this.el.src = cur.src;
+      this.el.load();
+    }
     this.notify();
   }
 
@@ -205,6 +227,9 @@ export class AudioEngine {
 
   /* ── <audio> wiring ────────────────────────────────────────────────── */
 
+  /** Listener registry → so destroy() can remove them. */
+  private boundListeners: Array<[keyof HTMLMediaElementEventMap, EventListener]> = [];
+
   private clearRetry() {
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
   }
@@ -220,19 +245,27 @@ export class AudioEngine {
         this.retryTimer = setTimeout(() => {
           if (this.wantPlay) this.safePlay();
         }, RETRY_BASE_MS * this.retryCount);
+      } else {
+        // Gave up — surface an error and stop trying.
+        this.errorMessage = `Couldn't play this track${err.message ? ': ' + err.message : ''}`;
+        this.wantPlay = false;
+        this.isPlaying = false;
+        this.notify();
       }
     });
   }
 
   private bindAudioEvents() {
     const el = this.el;
+    const on = <K extends keyof HTMLMediaElementEventMap>(event: K, handler: (ev: HTMLMediaElementEventMap[K]) => void) => {
+      el.addEventListener(event, handler as EventListener);
+      this.boundListeners.push([event, handler as EventListener]);
+    };
 
-    el.addEventListener('timeupdate', () => {
+    on('timeupdate', () => {
       if (this.isDragging) return;
       const t = el.currentTime;
       // Listening-history check: record once per song-play when crossing 30 s.
-      // (Recording is cheap; we still gate by recordedThisPlay so each
-      // advance/select yields at most one entry.)
       if (t >= HISTORY_THRESHOLD_SECS) {
         const song = this.playlist[this.currentSongIndex];
         if (song && this.recordedThisPlay !== song.id) {
@@ -249,7 +282,7 @@ export class AudioEngine {
       });
     });
 
-    el.addEventListener('durationchange', () => {
+    on('durationchange', () => {
       if (!isFinite(el.duration)) return;
       const d = el.duration;
       this.duration = d;
@@ -264,20 +297,21 @@ export class AudioEngine {
       this.notify();
     });
 
-    el.addEventListener('play', () => {
+    on('play', () => {
       this.retryCount = 0;
+      this.errorMessage = null;
       this.isPlaying = true;
       this.notify();
     });
 
-    el.addEventListener('pause', () => {
+    on('pause', () => {
       // During src swap the browser fires pause+empty; ignore that transient.
       if (el.src === '' || el.src === window.location.href) return;
       this.isPlaying = false;
       this.notify();
     });
 
-    el.addEventListener('ended', () => {
+    on('ended', () => {
       const len = this.playlist.length;
       if (!len) return;
       if (this.isRepeat) {
@@ -285,9 +319,8 @@ export class AudioEngine {
         this.safePlay();
         return;
       }
-      // Give end-of-track hooks (e.g. sleep timer) a chance to suppress the
-      // auto-advance. If any returns true, we stop here without queuing the
-      // next song; the hook is expected to have called pause().
+      // Give end-of-track hooks (e.g. sleep timer) a chance to suppress
+      // auto-advance.
       const suppress = this.endHooks.reduce((acc, h) => h() || acc, false);
       if (suppress) {
         this.wantPlay = false;
@@ -300,7 +333,7 @@ export class AudioEngine {
       this.advance(this.isShuffle ? shufflePick(this.currentSongIndex, len) : (this.currentSongIndex + 1) % len);
     });
 
-    el.addEventListener('error', () => {
+    on('error', () => {
       if (!this.wantPlay) return;
       if (this.retryCount < MAX_RETRY) {
         this.retryCount += 1;
@@ -314,11 +347,22 @@ export class AudioEngine {
           el.currentTime = savedTime;
           this.safePlay();
         }, RETRY_BASE_MS * this.retryCount);
+      } else {
+        // Surface a message and stop pretending to play.
+        const code = el.error?.code;
+        this.errorMessage = code === 4
+          ? 'Audio format not supported'
+          : code === 2 || code === 1
+            ? 'Network error while loading audio'
+            : 'Audio playback failed';
+        this.wantPlay = false;
+        this.isPlaying = false;
+        this.notify();
       }
     });
 
-    el.addEventListener('stalled', () => this.scheduleResume(2000));
-    el.addEventListener('waiting', () => this.scheduleResume(3000));
+    on('stalled', () => this.scheduleResume(2000));
+    on('waiting', () => this.scheduleResume(3000));
   }
 
   private scheduleResume(delay: number) {
@@ -333,6 +377,7 @@ export class AudioEngine {
   private advance(nextIndex: number) {
     this.currentSongIndex = nextIndex;
     this.retryCount = 0;
+    this.errorMessage = null;
     this.recordedThisPlay = null;  // a fresh song-play; allow it to be recorded
     this.clearRetry();
     const song = this.playlist[nextIndex];
@@ -514,9 +559,27 @@ export class AudioEngine {
     cancelAnimationFrame(this.rafId);
     this.el.pause();
     this.el.src = '';
+    // Remove every listener we added.
+    for (const [event, handler] of this.boundListeners) {
+      this.el.removeEventListener(event, handler);
+    }
+    this.boundListeners = [];
+    // Revoke blob URLs we created for uploaded songs to free memory.
+    for (const s of this.playlist) {
+      if (s.isUploaded && s.src) URL.revokeObjectURL(s.src);
+    }
+    this.endHooks = [];
     this.listeners.clear();
   }
 }
 
 /* Singleton — created once for the lifetime of the app. */
 export const audioEngine = new AudioEngine();
+
+// Vite HMR: when this module is replaced, tear down the old engine so a fresh
+// one isn't competing for the audio element / listeners. The new module's
+// top-level `export const audioEngine = new AudioEngine()` then runs.
+// Guarded so production builds (no `import.meta.hot`) skip this entirely.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => audioEngine.destroy());
+}

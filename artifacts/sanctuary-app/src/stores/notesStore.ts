@@ -60,14 +60,30 @@ export const notesStore = createStore<NotesState>({
   searchQuery: '',
 });
 
-// Persist notes (debounced).
+// Persist notes (debounced) — only when the notes array actually changes.
+let lastNotes = initialNotes;
 let notesTimer = 0;
+function flushNotes() {
+  if (!notesTimer) return;
+  clearTimeout(notesTimer);
+  notesTimer = 0;
+  try { localStorage.setItem(NOTES_KEY, JSON.stringify(lastNotes)); } catch { /* quota */ }
+}
 notesStore.subscribe(() => {
+  const cur = notesStore.getState().notes;
+  if (cur === lastNotes) return;
+  lastNotes = cur;
   if (notesTimer) clearTimeout(notesTimer);
   notesTimer = window.setTimeout(() => {
-    try { localStorage.setItem(NOTES_KEY, JSON.stringify(notesStore.getState().notes)); } catch { /* quota */ }
+    try { localStorage.setItem(NOTES_KEY, JSON.stringify(cur)); } catch { /* quota */ }
+    notesTimer = 0;
   }, 300);
 });
+// Flush pending writes on page hide so a tab close doesn't lose the user's
+// most recent edits. `pagehide` is more reliable than `beforeunload` on mobile.
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushNotes);
+}
 
 // Persist active note id eagerly (cheap, single string).
 let lastActive = initialActive;

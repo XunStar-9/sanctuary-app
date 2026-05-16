@@ -68,6 +68,18 @@ export const NoteEditor = memo(function NoteEditor() {
     setSelection({ x, y, start, end });
   }, [formattingEnabled]);
 
+  /**
+   * Outer click handler — clears the selection toolbar, but only if the click
+   * landed outside the textarea and outside the toolbar. Without this guard,
+   * the click event that immediately follows the textarea's `mouseup` would
+   * race with `setSelection(...)` and clear it before the toolbar paints.
+   */
+  const handleSurfaceClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as Element;
+    if (target.closest('textarea, [data-selection-toolbar]')) return;
+    setSelection(null);
+  }, []);
+
   const applyFormat = useCallback((key: FormatKey) => {
     if (!selection || !activeNote) return;
     const marker = MARKERS[key];
@@ -140,7 +152,7 @@ export const NoteEditor = memo(function NoteEditor() {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain" onClick={() => setSelection(null)}>
+      <div className="flex-1 overflow-y-auto overscroll-contain" onClick={handleSurfaceClick}>
         {activeNote ? (
           <div className="max-w-2xl mx-auto px-8 md:px-16 pt-14 pb-16">
             <input
@@ -160,7 +172,14 @@ export const NoteEditor = memo(function NoteEditor() {
               onChange={handleContentChange}
               onMouseUp={handleSelectionEvent}
               onTouchEnd={handleSelectionEvent}
-              onKeyUp={() => setSelection(null)}
+              onKeyUp={e => {
+                // Keep shift+arrow keyboard extension working — only clear on
+                // bare cursor moves, not selection-modifying combos.
+                if (!e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight'
+                  || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape')) {
+                  setSelection(null);
+                }
+              }}
               className={typoClass}
               style={typoStyle}
               placeholder="Start writing..."

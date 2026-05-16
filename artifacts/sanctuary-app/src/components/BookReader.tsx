@@ -9,7 +9,7 @@
  *    expressed via a single `pendingJumpRef` guard.
  */
 
-import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, List, ChevronLeft, ChevronRight, X, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Book, BookMark, FontSize, LineHeight, EditorFont } from '@/lib/types';
@@ -350,25 +350,37 @@ export const BookReader = memo(function BookReader({ book }: Props) {
     hideTimerRef.current = setTimeout(() => setToolbarVisible(false), 3500);
   }, []);
 
-  // Mount: show toolbar; unmount: clear all timers.
+  /**
+   * Flush any pending progress save immediately. Used both on unmount and
+   * when leaving a chapter so we never lose progress for the chapter the
+   * user *just* finished scrolling.
+   */
+  const flushProgressSave = useCallback(() => {
+    if (!saveTimerRef.current) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+    const id = chapter?.id;
+    if (id) booksActions.saveProgress(book.id, id, scrollPctRef.current);
+  }, [book.id, chapter?.id]);
+
+  // Mount: show toolbar; unmount: flush progress + clear all timers.
   useEffect(() => {
     showToolbar();
     return () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      flushProgressSave();
     };
-  }, [showToolbar]);
+  }, [showToolbar, flushProgressSave]);
 
   // Restore scroll position on chapter change (unless a bookmark jump is in flight).
-  useEffect(() => {
+  // useLayoutEffect → no flash of wrong scroll position before restore.
+  useLayoutEffect(() => {
     const el = contentRef.current;
     if (!el) return;
     if (pendingJumpRef.current && pendingJumpRef.current.chapterId === chapter?.id) return;
     const restorePos = progress?.chapterId === chapter?.id ? (progress?.position ?? 0) : 0;
     if (restorePos > 0) {
-      requestAnimationFrame(() => {
-        el.scrollTop = (restorePos / 100) * (el.scrollHeight - el.clientHeight);
-      });
+      el.scrollTop = (restorePos / 100) * (el.scrollHeight - el.clientHeight);
     } else {
       el.scrollTop = 0;
     }
@@ -398,29 +410,32 @@ export const BookReader = memo(function BookReader({ book }: Props) {
   }, [panelOpen, showToolbar]);
 
   const goToChapter = useCallback((idx: number) => {
+    flushProgressSave();
     setChapterIdx(idx);
     setScrollPct(0);
     setPanelOpen(false);
-  }, []);
+  }, [flushProgressSave]);
 
   // Functional updaters → no stale chapterIdx.
   const handlePrevChapter = useCallback(() => {
     setChapterIdx(prev => {
       if (prev <= 0) return prev;
+      flushProgressSave();
       setScrollPct(0);
       setPanelOpen(false);
       return prev - 1;
     });
-  }, []);
+  }, [flushProgressSave]);
 
   const handleNextChapter = useCallback(() => {
     setChapterIdx(prev => {
       if (prev >= totalChapters - 1) return prev;
+      flushProgressSave();
       setScrollPct(0);
       setPanelOpen(false);
       return prev + 1;
     });
-  }, [totalChapters]);
+  }, [flushProgressSave, totalChapters]);
 
   const handleAddBookmark = useCallback(() => {
     if (!chapter) return;
@@ -432,6 +447,7 @@ export const BookReader = memo(function BookReader({ book }: Props) {
     const idx = book.chapters.findIndex(c => c.id === bm.chapterId);
     if (idx < 0) return;
     pendingJumpRef.current = { chapterId: bm.chapterId, position: bm.position };
+    flushProgressSave();
     setChapterIdx(idx);
     setPanelOpen(false);
     requestAnimationFrame(() => {
@@ -442,7 +458,28 @@ export const BookReader = memo(function BookReader({ book }: Props) {
         pendingJumpRef.current = null;
       });
     });
-  }, [book.chapters]);
+  }, [book.chapters, flushProgressSave]);
+
+  // Keyboard shortcuts: Esc → back to shelf, ← / → → prev/next chapter.
+  // Skip when an input/textarea is focused so we don't fight the user.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as Element | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || (t as HTMLElement).isContentEditable)) return;
+      if (e.key === 'Escape') {
+        if (panelOpen) setPanelOpen(false);
+        else booksActions.clearActive();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevChapter();
+      } else if (e.key === 'ArrowRight') {
+        handleNextChapter();
+      } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
+        handleAddBookmark();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [panelOpen, handlePrevChapter, handleNextChapter, handleAddBookmark]);
 
   if (!chapter) return null;
 
