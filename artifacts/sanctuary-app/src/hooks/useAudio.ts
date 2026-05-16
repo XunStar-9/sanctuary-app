@@ -1,430 +1,68 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { Song } from '@/lib/types';
-import { DEFAULT_PLAYLIST, GRADIENTS } from '@/lib/types';
-import {
-  saveAudioFile, loadAudioFile, removeAudioFile,
-  savePlaylistMeta, loadPlaylistMeta,
-} from '@/lib/audioStorage';
+/**
+ * useAudio — thin React binding for the AudioEngine singleton.
+ *
+ * The previous file was 350+ lines mixing React state, refs, an HTMLAudioElement
+ * and IndexedDB. All of that now lives in `audioEngine.ts`. This hook just:
+ *  1. Subscribes to the engine for re-renders.
+ *  2. Owns the `<input type="file">` ref + click handler (purely DOM).
+ *  3. Exposes the engine's actions under their old names so component code
+ *     keeps working unchanged.
+ */
 
-function secsToString(s: number): string {
-  const m = Math.floor(s / 60);
-  return `${m}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
-}
-
-function parseFileMeta(file: File, index: number): Omit<Song, 'durationSecs' | 'duration'> {
-  const raw = file.name.replace(/\.[^.]+$/, '');
-  const dashIdx = raw.indexOf(' - ');
-  const artist = dashIdx !== -1 ? raw.substring(0, dashIdx).trim() : 'Unknown Artist';
-  const title  = dashIdx !== -1 ? raw.substring(dashIdx + 3).trim() : raw;
-  return {
-    id: `uploaded-${Date.now()}-${index}`,
-    title, artist,
-    gradient: GRADIENTS[(index + Math.floor(Date.now() / 1000)) % GRADIENTS.length],
-    src: URL.createObjectURL(file),
-    isUploaded: true,
-  };
-}
-
-function buildInitialPlaylist(): Song[] {
-  const saved = loadPlaylistMeta();
-  if (saved.length) {
-    return [
-      ...DEFAULT_PLAYLIST,
-      ...saved.map(s => ({ ...s, src: undefined })),
-    ];
-  }
-  return DEFAULT_PLAYLIST;
-}
-
-function clearTimer(ref: React.RefObject<ReturnType<typeof setTimeout> | null>) {
-  if (ref.current !== null) { clearTimeout(ref.current); ref.current = null; }
-}
-
-const MAX_RETRY = 3;
-const RETRY_DELAY = 1000;
+import { useRef, useCallback, useSyncExternalStore } from 'react';
+import { audioEngine } from '@/stores/audioEngine';
 
 export function useAudio() {
-  const [playlist,          setPlaylist]          = useState<Song[]>(buildInitialPlaylist);
-  const [currentSongIndex,  setCurrentSongIndex]  = useState(0);
-  const [isPlaying,         setIsPlaying]         = useState(false);
-  const [isShuffle,         setIsShuffle]         = useState(false);
-  const [isRepeat,          setIsRepeat]          = useState(false);
-  const [currentTime,       setCurrentTime]       = useState(0);
-  const [duration,          setDuration]          = useState(0);
-  const [isDragging,        setIsDragging]        = useState(false);
-  const [volume,            setVolume]            = useState(1);
-
-  const audioRef    = useRef<HTMLAudioElement | null>(null);
+  const snap = useSyncExternalStore(audioEngine.subscribe, audioEngine.getSnapshot, audioEngine.getSnapshot);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const shuffleNext = useCallback((prev: number, len: number) => {
-    if (len <= 1) return 0;
-    const n = Math.floor(Math.random() * (len - 1));
-    return n >= prev ? n + 1 : n;
-  }, []);
-
-  const isShuffleRef  = useRef(isShuffle);
-  const isRepeatRef   = useRef(isRepeat);
-  const playlistRef   = useRef(playlist);
-  const isDraggingRef = useRef(isDragging);
-  const currentSongIndexRef = useRef(currentSongIndex);
-  const durationRef = useRef(duration);
-  const retryCountRef = useRef(0);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wantPlayRef = useRef(false);
-  isShuffleRef.current  = isShuffle;
-  isRepeatRef.current   = isRepeat;
-  playlistRef.current   = playlist;
-  isDraggingRef.current = isDragging;
-  currentSongIndexRef.current = currentSongIndex;
-  durationRef.current   = duration;
-
-  const rafId = useRef(0);
-
-  useEffect(() => {
-    const saved = loadPlaylistMeta();
-    if (!saved.length) return;
-    let cancelled = false;
-    (async () => {
-      const restored: Song[] = [];
-      for (const meta of saved) {
-        const blobUrl = await loadAudioFile(meta.id);
-        restored.push({ ...meta, src: blobUrl ?? undefined });
-      }
-      if (cancelled) return;
-      setPlaylist(prev => {
-        const defaults = prev.filter(s => !s.isUploaded);
-        return [...defaults, ...restored];
-      });
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const persistTimer = useRef(0);
-  useEffect(() => {
-    clearTimeout(persistTimer.current);
-    persistTimer.current = window.setTimeout(() => {
-      const uploaded = playlist.filter(s => s.isUploaded);
-      savePlaylistMeta(
-        uploaded.map(s => ({
-          id: s.id, title: s.title, artist: s.artist,
-          duration: s.duration, durationSecs: s.durationSecs,
-          gradient: s.gradient, isUploaded: true as const,
-        }))
-      );
-    }, 500);
-    return () => clearTimeout(persistTimer.current);
-  }, [playlist]);
-
-  const safePlay = useCallback((audio: HTMLAudioElement) => {
-    const p = audio.play();
-    if (p) {
-      p.catch((err) => {
-        if (err.name === 'AbortError') return;
-        if (err.name === 'NotAllowedError') return;
-        if (retryCountRef.current < MAX_RETRY && wantPlayRef.current) {
-          retryCountRef.current += 1;
-          clearTimer(retryTimerRef);
-          retryTimerRef.current = setTimeout(() => {
-            if (!audioRef.current || !wantPlayRef.current) return;
-            safePlay(audioRef.current);
-          }, RETRY_DELAY * retryCountRef.current);
-        }
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    const audio = new Audio();
-    audio.preload = 'auto';
-    audio.volume = volume;
-    audioRef.current = audio;
-
-    let lastReportedTime = 0;
-    const onTimeUpdate = () => {
-      if (isDraggingRef.current) return;
-      const t = audio.currentTime;
-      if (Math.abs(t - lastReportedTime) < 0.25) return;
-      cancelAnimationFrame(rafId.current);
-      rafId.current = requestAnimationFrame(() => {
-        lastReportedTime = t;
-        setCurrentTime(t);
-      });
-    };
-    const onDurationChange = () => {
-      if (!isFinite(audio.duration)) return;
-      const d = audio.duration;
-      setDuration(d);
-      const idx = currentSongIndexRef.current;
-      const song = playlistRef.current[idx];
-      if (song && (song.durationSecs === 0 || song.duration === '--:--')) {
-        setPlaylist(prev => prev.map((s, i) =>
-          i === idx ? { ...s, durationSecs: d, duration: secsToString(d) } : s
-        ));
-      }
-    };
-    const onPlay  = () => { retryCountRef.current = 0; setIsPlaying(true); };
-    const onPause = () => {
-      // Always reflect the audio element's actual state. If we wanted to play
-      // but the system paused us (audio focus loss, network, etc.), we still
-      // need to show the UI as paused so the user can manually resume.
-      // Exception: when src is being swapped, the browser fires pause+empty
-      // first; ignore that transient pause if the new src is loading.
-      if (audio.src === '' || audio.src === window.location.href) return;
-      setIsPlaying(false);
-    };
-    const onEnded = () => {
-      const len = playlistRef.current.length;
-      if (!len) return;
-      if (isRepeatRef.current) {
-        audio.currentTime = 0;
-        safePlay(audio);
-        return;
-      }
-      wantPlayRef.current = true;
-      setIsPlaying(true);
-      setCurrentSongIndex(prev =>
-        isShuffleRef.current ? shuffleNext(prev, len) : (prev + 1) % len
-      );
-    };
-
-    const onError = () => {
-      if (!wantPlayRef.current) return;
-      if (retryCountRef.current < MAX_RETRY) {
-        retryCountRef.current += 1;
-        const savedTime = audio.currentTime;
-        clearTimer(retryTimerRef);
-        retryTimerRef.current = setTimeout(() => {
-          if (!audioRef.current || !wantPlayRef.current) return;
-          const src = audioRef.current.src;
-          if (!src) return;
-          audioRef.current.src = src;
-          audioRef.current.currentTime = savedTime;
-          safePlay(audioRef.current);
-        }, RETRY_DELAY * retryCountRef.current);
-      }
-    };
-
-    const onStalled = () => {
-      if (!wantPlayRef.current) return;
-      clearTimer(retryTimerRef);
-      retryTimerRef.current = setTimeout(() => {
-        if (!audioRef.current || !wantPlayRef.current) return;
-        if (audioRef.current.paused) safePlay(audioRef.current);
-      }, 2000);
-    };
-
-    const onWaiting = () => {
-      clearTimer(retryTimerRef);
-      retryTimerRef.current = setTimeout(() => {
-        if (!audioRef.current || !wantPlayRef.current) return;
-        if (audioRef.current.paused) safePlay(audioRef.current);
-      }, 3000);
-    };
-
-    audio.addEventListener('timeupdate',     onTimeUpdate);
-    audio.addEventListener('durationchange', onDurationChange);
-    audio.addEventListener('play',           onPlay);
-    audio.addEventListener('pause',          onPause);
-    audio.addEventListener('ended',          onEnded);
-    audio.addEventListener('error',          onError);
-    audio.addEventListener('stalled',        onStalled);
-    audio.addEventListener('waiting',        onWaiting);
-
-    return () => {
-      cancelAnimationFrame(rafId.current);
-      clearTimer(retryTimerRef);
-      audio.removeEventListener('timeupdate',     onTimeUpdate);
-      audio.removeEventListener('durationchange', onDurationChange);
-      audio.removeEventListener('play',           onPlay);
-      audio.removeEventListener('pause',          onPause);
-      audio.removeEventListener('ended',          onEnded);
-      audio.removeEventListener('error',          onError);
-      audio.removeEventListener('stalled',        onStalled);
-      audio.removeEventListener('waiting',        onWaiting);
-      audio.pause();
-      audioRef.current = null;
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    retryCountRef.current = 0;
-    clearTimer(retryTimerRef);
-    const song = playlist[currentSongIndex];
-    if (song?.src) {
-      audio.src = song.src;
-      audio.load();
-      setCurrentTime(0);
-      setDuration(song.durationSecs ?? 0);
-      if (wantPlayRef.current) safePlay(audio);
-    } else {
-      audio.removeAttribute('src');
-      setCurrentTime(0);
-      setDuration(song?.durationSecs ?? 0);
-      wantPlayRef.current = false;
-      setIsPlaying(false);
-    }
-  }, [currentSongIndex, playlist, safePlay]);
-
-  useEffect(() => {
-    wantPlayRef.current = isPlaying;
-    const audio = audioRef.current;
-    if (!audio || !playlist[currentSongIndex]?.src) return;
-    if (isPlaying) safePlay(audio);
-    else           audio.pause();
-  }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const currentSong = useMemo(
-    () => playlist[currentSongIndex] ?? playlist[0] ?? undefined,
-    [playlist, currentSongIndex],
-  );
-
-  const handlePlayPause = useCallback(() => {
-    if (!audioRef.current || !playlistRef.current.length) return;
-    const song = playlistRef.current[currentSongIndexRef.current];
-    if (!song?.src) {
-      setIsPlaying(p => !p);
-      return;
-    }
-    if (audioRef.current.paused) {
-      wantPlayRef.current = true;
-      safePlay(audioRef.current);
-    } else {
-      wantPlayRef.current = false;
-      audioRef.current.pause();
-    }
-  }, [safePlay]);
-
-  const handleNext = useCallback(() => {
-    if (!playlist.length) return;
-    wantPlayRef.current = true;
-    setIsPlaying(true);
-    setCurrentSongIndex(p =>
-      isShuffle ? shuffleNext(p, playlist.length) : (p + 1) % playlist.length
-    );
-  }, [isShuffle, playlist.length, shuffleNext]);
-
-  const handlePrev = useCallback(() => {
-    if (!playlist.length) return;
-    if (audioRef.current && audioRef.current.currentTime > 3) {
-      audioRef.current.currentTime = 0;
-      return;
-    }
-    wantPlayRef.current = true;
-    setIsPlaying(true);
-    setCurrentSongIndex(p => p === 0 ? playlist.length - 1 : p - 1);
-  }, [playlist.length]);
-
-  const handleSelectSong = useCallback((idx: number) => {
-    wantPlayRef.current = true;
-    setCurrentSongIndex(idx);
-    setIsPlaying(true);
-  }, []);
-
-  const prevVolumeRef = useRef(1);
-  const handleVolume = useCallback((val: number[]) => {
-    const v = val[0] / 100;
-    if (v > 0) prevVolumeRef.current = v;
-    setVolume(v);
-    if (audioRef.current) audioRef.current.volume = v;
-  }, []);
-
-  const toggleMute = useCallback(() => {
-    if (volume > 0) {
-      prevVolumeRef.current = volume;
-      setVolume(0);
-      if (audioRef.current) audioRef.current.volume = 0;
-    } else {
-      const restored = prevVolumeRef.current || 1;
-      setVolume(restored);
-      if (audioRef.current) audioRef.current.volume = restored;
-    }
-  }, [volume]);
-
-  const handleSeek = useCallback((val: number[]) => {
-    const song = playlistRef.current[currentSongIndexRef.current];
-    const d = song?.src ? (audioRef.current?.duration ?? durationRef.current) : durationRef.current;
-    const t = (val[0] / 100) * d;
-    setCurrentTime(t);
-    if (audioRef.current && song?.src) audioRef.current.currentTime = t;
-  }, []);
-
-  const progressPct = useMemo((): number => {
-    const d = currentSong?.src ? duration : (currentSong?.durationSecs ?? 0);
-    return d ? (currentTime / d) * 100 : 0;
-  }, [currentSong, currentTime, duration]);
-
-  const displayTime     = useMemo(() => secsToString(currentTime), [currentTime]);
-  const displayDuration = useMemo(() => {
-    if (currentSong?.src && duration > 0) return secsToString(duration);
-    return currentSong?.duration ?? '0:00';
-  }, [currentSong, duration]);
 
   const handleUploadClick = useCallback(() => fileInputRef.current?.click(), []);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (!files.length) return;
-    const newSongs: Song[] = files.map((f, i) => ({ ...parseFileMeta(f, i), durationSecs: 0, duration: '--:--' }));
-    for (let i = 0; i < files.length; i++) {
-      saveAudioFile(newSongs[i].id, files[i]).catch(() => {});
-    }
-    wantPlayRef.current = true;
-    setPlaylist(prev => {
-      const next = [...prev, ...newSongs];
-      setCurrentSongIndex(prev.length);
-      return next;
-    });
-    setIsPlaying(true);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length) audioEngine.uploadFiles(files);
     e.target.value = '';
   }, []);
 
   const handleRemoveSong = useCallback((e: React.MouseEvent, songId: string) => {
     e.stopPropagation();
-    setPlaylist(prev => {
-      const removeIdx = prev.findIndex(s => s.id === songId);
-      if (removeIdx === -1) return prev;
-      const removed = prev[removeIdx];
-      if (removed.isUploaded) {
-        if (removed.src) URL.revokeObjectURL(removed.src);
-        removeAudioFile(songId).catch(() => {});
-      }
-      const next = prev.filter(s => s.id !== songId);
-      if (!next.length) {
-        setCurrentSongIndex(0);
-        wantPlayRef.current = false;
-        setIsPlaying(false);
-        if (audioRef.current) { audioRef.current.pause(); audioRef.current.removeAttribute('src'); }
-        return next;
-      }
-      setCurrentSongIndex(ci => {
-        if (removeIdx < ci) return ci - 1;
-        if (removeIdx === ci) {
-          wantPlayRef.current = false;
-          setIsPlaying(false);
-          return Math.min(ci, next.length - 1);
-        }
-        return ci;
-      });
-      return next;
-    });
+    audioEngine.removeSong(songId);
   }, []);
 
-  const toggleShuffle = useCallback(() => setIsShuffle(p => !p), []);
-  const toggleRepeat  = useCallback(() => setIsRepeat(p => !p),  []);
-  const startDrag     = useCallback(() => setIsDragging(true),   []);
-  const stopDrag      = useCallback(() => setIsDragging(false),  []);
+  // Slider components emit `number[]` (single-thumb), normalize here.
+  const handleSeek    = useCallback((val: number[]) => audioEngine.seek(val[0]),       []);
+  const handleVolume  = useCallback((val: number[]) => audioEngine.setVolume(val[0]),  []);
 
   return {
-    playlist, currentSong, currentSongIndex,
-    isPlaying, isShuffle, isRepeat, volume,
+    /* state */
+    playlist:         snap.playlist,
+    currentSong:      snap.currentSong,
+    currentSongIndex: snap.currentSongIndex,
+    isPlaying:        snap.isPlaying,
+    isShuffle:        snap.isShuffle,
+    isRepeat:         snap.isRepeat,
+    volume:           snap.volume,
+    progressPct:      snap.progressPct,
+    displayTime:      snap.displayTime,
+    displayDuration:  snap.displayDuration,
+
+    /* file-input plumbing */
     fileInputRef,
-    progressPct, displayTime, displayDuration,
-    handlePlayPause, handleNext, handlePrev, handleSelectSong,
-    handleSeek, handleVolume, toggleMute, startDrag, stopDrag,
-    handleUploadClick, handleFileChange, handleRemoveSong,
-    toggleShuffle, toggleRepeat,
+    handleUploadClick,
+    handleFileChange,
+
+    /* controls */
+    handlePlayPause:  audioEngine.playPause,
+    handleNext:       audioEngine.next,
+    handlePrev:       audioEngine.prev,
+    handleSelectSong: audioEngine.selectSong,
+    handleSeek,
+    handleVolume,
+    toggleMute:       audioEngine.toggleMute,
+    startDrag:        audioEngine.startDrag,
+    stopDrag:         audioEngine.stopDrag,
+    handleRemoveSong,
+    toggleShuffle:    audioEngine.toggleShuffle,
+    toggleRepeat:     audioEngine.toggleRepeat,
   };
 }
