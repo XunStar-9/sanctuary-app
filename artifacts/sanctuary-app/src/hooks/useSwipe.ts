@@ -48,35 +48,46 @@ export function useSwipe({
   thresholdX = 60, thresholdY = 40, clickSlop = 8,
   horizontalOnly = false,
 }: SwipeOptions) {
-  const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const startRef = useRef<{ x: number; y: number; t: number; pointerId: number } | null>(null);
   const wasSwipeRef = useRef(false);
   const [dragDx, setDragDx] = useState(0);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     // Ignore right-clicks and middle-clicks.
     if (e.button !== 0 && e.pointerType === 'mouse') return;
-    startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    startRef.current = { x: e.clientX, y: e.clientY, t: Date.now(), pointerId: e.pointerId };
     wasSwipeRef.current = false;
     setDragDx(0);
+    // Capture the pointer so dragging off-edge (especially on mobile) keeps
+    // delivering events to this element instead of leaking to neighbors.
+    try { (e.currentTarget as Element).setPointerCapture?.(e.pointerId); } catch { /* unsupported */ }
   }, []);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const start = startRef.current;
-    if (!start) return;
+    if (!start || start.pointerId !== e.pointerId) return;
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
     // Live feedback: only show horizontal nudge while horizontal motion dominates.
     if (Math.abs(dx) > Math.abs(dy)) {
       // Rubber-band: clamp so it never feels infinite.
       setDragDx(Math.max(-100, Math.min(100, dx * 0.6)));
+    } else if (dragDx !== 0) {
+      setDragDx(0);
     }
-  }, []);
+  }, [dragDx]);
 
   const finish = useCallback((e: React.PointerEvent) => {
     const start = startRef.current;
+    if (!start || start.pointerId !== e.pointerId) {
+      startRef.current = null;
+      setDragDx(0);
+      return;
+    }
     startRef.current = null;
     setDragDx(0);
-    if (!start) return;
+    try { (e.currentTarget as Element).releasePointerCapture?.(e.pointerId); } catch { /* unsupported */ }
+
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
     const adx = Math.abs(dx);
@@ -104,9 +115,11 @@ export function useSwipe({
     }
   }, [clickSlop, thresholdX, thresholdY, horizontalOnly, onSwipeLeft, onSwipeRight, onSwipeUp, onSwipeDown]);
 
-  const onPointerCancel = useCallback(() => {
+  const onPointerCancel = useCallback((e: React.PointerEvent) => {
     startRef.current = null;
+    wasSwipeRef.current = false;
     setDragDx(0);
+    try { (e.currentTarget as Element).releasePointerCapture?.(e.pointerId); } catch { /* unsupported */ }
   }, []);
 
   /**

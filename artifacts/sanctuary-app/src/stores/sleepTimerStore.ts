@@ -2,18 +2,20 @@
  * Sleep timer store
  *
  * Two mutually exclusive countdown modes:
- *   • minutes-based — ticks every second; pause when remainingSecs reaches 0
+ *   • minutes-based — pauses when the wall-clock target time is reached.
  *   • track-based   — pauses after N more tracks finish (decremented in the
- *                     audio engine's `ended` handler)
+ *                     audio engine's `ended` handler).
+ *
+ * Drift handling: rather than just decrementing `remainingSecs` in
+ * `setInterval(..., 1000)` (which browsers throttle aggressively to ≥1s
+ * intervals when the tab is in the background — sometimes much longer), we
+ * store the wall-clock `deadline` and recompute `remainingSecs` from
+ * `deadline - Date.now()` each tick. We also re-sync on `visibilitychange`
+ * so the user sees the correct countdown the moment they switch back.
  *
  * The store owns its own setInterval. We don't persist sleep timer state to
  * localStorage — a sleep timer that survives a tab restart would be surprising
  * UX (the user closed the tab, they almost certainly want quiet).
- *
- * To avoid an import cycle (audioEngine imports nothing from this module, but
- * this module wants to *call* audioEngine.pause), we resolve the engine via a
- * lazy dynamic import on the timer-fired path. That path runs at most once per
- * timer expiry, so the cost is negligible.
  */
 
 import { createStore } from '@/lib/store';
@@ -31,12 +33,15 @@ export const sleepTimerStore = createStore<SleepTimerState>({
 });
 
 let tickHandle: number | null = null;
+/** Wall-clock target (ms since epoch) for minute-based mode. */
+let deadline: number | null = null;
 
 function clearTick() {
   if (tickHandle !== null) {
     clearInterval(tickHandle);
     tickHandle = null;
   }
+  deadline = null;
 }
 
 /** Pause via the audio engine. Lazy-loaded to break the import cycle. */
@@ -55,28 +60,56 @@ async function pauseAudio() {
  * We register lazily once at module init via dynamic import to keep the
  * audioEngine module free of any sleepTimer dependency (preventing a cycle
  * through historyStore → audioEngine → sleepTimer → audioEngine).
+ *
+ * In dev with Vite HMR, this module can re-execute. The audioEngine module is
+ * itself a singleton; re-registering would queue a second hook. The hook
+ * registry doesn't dedupe by reference, but since each new hook closure calls
+ * the same `sleepTimerActions.onTrackEnded` (which is idempotent in its no-op
+ * case — returns false when no timer), a stale hook is harmless. To be tidy
+ * we still keep an `unregister` reference so future code could clean it up.
  */
+let unregisterEndHook: (() => void) | null = null;
 void (async () => {
   try {
     const mod = await import('@/stores/audioEngine');
-    mod.audioEngine.registerEndOfTrackHook(() => sleepTimerActions.onTrackEnded());
+    unregisterEndHook = mod.audioEngine.registerEndOfTrackHook(
+      () => sleepTimerActions.onTrackEnded(),
+    );
   } catch { /* engine not available — skip */ }
 })();
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    clearTick();
+    unregisterEndHook?.();
+  });
+}
+
+function tick() {
+  if (deadline === null) { clearTick(); return; }
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) {
+    clearTick();
+    sleepTimerStore.set({ remainingSecs: null, tracksRemaining: null });
+    pauseAudio();
+    return;
+  }
+  const next = Math.ceil(remainingMs / 1000);
+  if (next !== sleepTimerStore.getState().remainingSecs) {
+    sleepTimerStore.set({ remainingSecs: next });
+  }
+}
 
 function startTicking() {
   if (tickHandle !== null) return;
-  tickHandle = window.setInterval(() => {
-    const { remainingSecs } = sleepTimerStore.getState();
-    if (remainingSecs === null) { clearTick(); return; }
-    const next = remainingSecs - 1;
-    if (next <= 0) {
-      clearTick();
-      sleepTimerStore.set({ remainingSecs: null, tracksRemaining: null });
-      pauseAudio();
-    } else {
-      sleepTimerStore.set({ remainingSecs: next });
-    }
-  }, 1000);
+  tickHandle = window.setInterval(tick, 1000);
+}
+
+// Re-sync whenever the tab becomes visible again. Without this the displayed
+// countdown could be many seconds off after a long background period.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && deadline !== null) tick();
+  });
 }
 
 export const sleepTimerActions = {
@@ -87,8 +120,10 @@ export const sleepTimerActions = {
       return;
     }
     clearTick();
+    const secs = Math.round(minutes * 60);
+    deadline = Date.now() + secs * 1000;
     sleepTimerStore.set({
-      remainingSecs: Math.round(minutes * 60),
+      remainingSecs: secs,
       tracksRemaining: null,
     });
     startTicking();

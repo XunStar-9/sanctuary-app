@@ -115,18 +115,27 @@ export function persist<T extends object>(store: Store<T>, opts: PersistOptions<
     }
   } catch { /* corrupted entry — ignore and keep defaults */ }
 
-  // 2. Subscribe & write
+  // 2. Subscribe & write (debounced).
   let timer = 0;
   const delay = opts.debounceMs ?? 200;
+  const writeNow = () => {
+    if (timer) { clearTimeout(timer); timer = 0; }
+    try {
+      const value = opts.pick ? opts.pick(store.getState()) : store.getState();
+      localStorage.setItem(opts.key, JSON.stringify(value));
+    } catch { /* quota exceeded — drop silently */ }
+  };
   store.subscribe(() => {
     if (timer) clearTimeout(timer);
-    timer = window.setTimeout(() => {
-      try {
-        const value = opts.pick ? opts.pick(store.getState()) : store.getState();
-        localStorage.setItem(opts.key, JSON.stringify(value));
-      } catch { /* quota exceeded — drop silently */ }
-    }, delay);
+    timer = window.setTimeout(writeNow, delay);
   });
+
+  // Flush pending writes on page hide so the user's last change survives a
+  // tab close/refresh. `pagehide` is more reliable than `beforeunload` on
+  // mobile Safari and iOS PWAs.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => { if (timer) writeNow(); });
+  }
 }
 
 /** Subscribe imperatively (for non-React code or one-shot side effects). */

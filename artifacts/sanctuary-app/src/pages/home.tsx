@@ -11,6 +11,7 @@ import { useStore } from '@/lib/store';
 import { uiStore, uiActions } from '@/stores/uiStore';
 import { AppSidebar } from '@/components/AppSidebar';
 import { NoteEditor } from '@/components/NoteEditor';
+import { useGlobalShortcuts } from '@/lib/globalKeys';
 
 // Eagerly import sleep-timer store so its end-of-track hook registers with
 // the audio engine before any track ends, even if no sleep-timer UI is open.
@@ -40,6 +41,9 @@ export default function Home() {
   const settingsMounted   = useMountedOnce(settingsOpen);
   const typographyMounted = useMountedOnce(typographyOpen);
   const fullscreenMounted = useMountedOnce(fullscreenOpen);
+
+  // Global keyboard shortcuts (Space, J, K, Cmd+,).
+  useGlobalShortcuts();
 
   return (
     <div className="h-[100dvh] bg-background text-foreground font-serif selection:bg-primary/20 flex overflow-hidden">

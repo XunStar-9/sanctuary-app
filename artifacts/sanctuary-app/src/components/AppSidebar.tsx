@@ -146,6 +146,7 @@ function MusicDock({
   const progressPct    = useAudioSelector(s => s.progressPct);
   const displayTime    = useAudioSelector(s => s.displayTime);
   const displayDuration = useAudioSelector(s => s.displayDuration);
+  const errorMessage   = useAudioSelector(s => s.errorMessage);
   const { handlePlayPause, handleNext, handlePrev, handleSeek, handleVolume,
           toggleMute, startDrag, stopDrag, handleUploadClick, toggleShuffle, toggleRepeat } = useAudioControls();
   const expanded = useStore(uiStore, s => s.musicExpanded);
@@ -250,8 +251,11 @@ function MusicDock({
 
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-medium truncate text-foreground">{currentSong?.title ?? '—'}</p>
-            <p className="text-[11px] font-sans text-muted-foreground truncate">
-              {sleepLabel ?? (currentSong?.artist ?? '')}
+            <p className={cn(
+              'text-[11px] font-sans truncate',
+              errorMessage ? 'text-destructive' : 'text-muted-foreground',
+            )}>
+              {errorMessage ?? sleepLabel ?? (currentSong?.artist ?? '')}
             </p>
           </div>
         </div>
@@ -501,7 +505,6 @@ function PlaylistPanel({ open, onClose }: PlaylistPanelProps) {
 
 export const AppSidebar = memo(function AppSidebar() {
   const open = useStore(uiStore, s => s.sidebarOpen);
-  const controls = useAudioControls();
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const closePlaylist = useCallback(() => setPlaylistOpen(false), []);
   const openPlaylist = useCallback(() => setPlaylistOpen(true), []);
@@ -515,15 +518,6 @@ export const AppSidebar = memo(function AppSidebar() {
         open ? 'translate-x-0' : '-translate-x-full md:-translate-x-full',
       )}
     >
-      <input
-        ref={controls.fileInputRef}
-        type="file"
-        accept="audio/*"
-        multiple
-        className="hidden"
-        onChange={controls.handleFileChange}
-      />
-
       <div className="flex items-center justify-between px-5 pt-6 pb-4 shrink-0">
         <span className="text-xs font-sans tracking-[0.2em] uppercase text-muted-foreground/50 select-none">Sanctuary</span>
         <button

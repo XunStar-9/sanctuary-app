@@ -1,42 +1,35 @@
 /**
  * useAudio — thin React binding for the AudioEngine singleton.
  *
- * Provides two levels of subscription:
- *  - `useAudio()` — full snapshot (use sparingly, causes re-render on every timeupdate)
- *  - `useAudioControls()` — stable actions + file input ref only (never triggers re-render)
+ * Three flavors:
+ *  - `useAudioControls()` — stable actions only, never re-renders.
+ *  - `useAudioSelector(fn)` — subscribes to a single derived value.
+ *  - `useAudio()` — full snapshot (re-renders on every timeupdate ~4×/sec —
+ *    avoid where possible, prefer the targeted hooks above).
  *
- * For components that only need a subset of audio state, subscribe directly via
- * `useSyncExternalStore(audioEngine.subscribe, selector)`.
+ * The Upload button uses a global file-picker (`triggerAudioUpload`) rather
+ * than a per-mount `<input>` ref so multiple mount points (sidebar dock,
+ * playlist panel, fullscreen player) all work.
  */
 
 import { useRef, useCallback, useSyncExternalStore } from 'react';
 import { audioEngine, type AudioSnapshot } from '@/stores/audioEngine';
+import { triggerAudioUpload } from '@/lib/audioUpload';
 
 /* ── Actions-only hook (zero re-renders from audio state changes) ────────── */
 
 export function useAudioControls() {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const handleUploadClick = useCallback(() => fileInputRef.current?.click(), []);
-
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length) audioEngine.uploadFiles(files);
-    e.target.value = '';
-  }, []);
-
   const handleRemoveSong = useCallback((e: React.MouseEvent, songId: string) => {
     e.stopPropagation();
     audioEngine.removeSong(songId);
   }, []);
 
+  // Slider components emit `number[]` (single-thumb), normalize here.
   const handleSeek   = useCallback((val: number[]) => audioEngine.seek(val[0]),      []);
   const handleVolume = useCallback((val: number[]) => audioEngine.setVolume(val[0]), []);
 
   return {
-    fileInputRef,
-    handleUploadClick,
-    handleFileChange,
+    handleUploadClick: triggerAudioUpload,
     handleRemoveSong,
     handlePlayPause:  audioEngine.playPause,
     handleNext:       audioEngine.next,
@@ -55,29 +48,25 @@ export function useAudioControls() {
 /* ── Targeted snapshot selectors ─────────────────────────────────────────── */
 
 /**
- * Use a custom selector on the audio engine snapshot. Only re-renders when
- * the selected value changes (Object.is comparison).
+ * Subscribe to a derived value of the audio snapshot. Re-renders only when
+ * the selector output changes (Object.is comparison). Selectors don't need
+ * to be stable references — we track the latest via a ref.
  */
 export function useAudioSelector<T>(selector: (snap: AudioSnapshot) => T): T {
   const selectorRef = useRef(selector);
   selectorRef.current = selector;
   const lastRef = useRef<{ value: T } | null>(null);
 
-  return useSyncExternalStore(
-    audioEngine.subscribe,
-    () => {
-      const snap = audioEngine.getSnapshot();
-      const value = selectorRef.current(snap);
-      const last = lastRef.current;
-      if (last && Object.is(last.value, value)) return last.value;
-      lastRef.current = { value };
-      return value;
-    },
-    () => {
-      const snap = audioEngine.getSnapshot();
-      return selectorRef.current(snap);
-    },
-  );
+  const getSnapshot = useCallback(() => {
+    const snap = audioEngine.getSnapshot();
+    const value = selectorRef.current(snap);
+    const last = lastRef.current;
+    if (last && Object.is(last.value, value)) return last.value;
+    lastRef.current = { value };
+    return value;
+  }, []);
+
+  return useSyncExternalStore(audioEngine.subscribe, getSnapshot, getSnapshot);
 }
 
 /* ── Full snapshot hook (legacy — prefer targeted selectors) ─────────────── */

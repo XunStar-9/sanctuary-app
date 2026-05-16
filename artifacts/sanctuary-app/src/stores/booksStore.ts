@@ -170,6 +170,11 @@ export const booksActions = {
 
 /* ── Selectors ───────────────────────────────────────────────────────────── */
 
+/** Cache for `bookmarkCountMap` — keyed by the bookmarks array reference so
+ *  that consumers using `useStore(booksStore, s => booksSelectors.bookmarkCountMap(s))`
+ *  get a stable Map and only re-render when bookmarks actually change. */
+let _bmCountCache: { src: BookMark[]; map: Map<string, number> } | null = null;
+
 export const booksSelectors = {
   activeBook(s: BooksState): Book | null {
     return s.books.find(b => b.id === s.activeBookId) ?? null;
@@ -181,12 +186,16 @@ export const booksSelectors = {
     if (!s.activeBookId) return [];
     return s.bookmarks.filter(b => b.bookId === s.activeBookId);
   },
-  /** Pre-computed bookmark count map: { bookId → count }. O(bookmarks) once. */
+  /** Pre-computed bookmark count map: { bookId → count }. O(bookmarks) once;
+   *  the result is memoized by bookmark-array identity so React selectors
+   *  don't see a fresh Map on every store change. */
   bookmarkCountMap(s: BooksState): Map<string, number> {
+    if (_bmCountCache && _bmCountCache.src === s.bookmarks) return _bmCountCache.map;
     const map = new Map<string, number>();
     for (const bm of s.bookmarks) {
       map.set(bm.bookId, (map.get(bm.bookId) ?? 0) + 1);
     }
+    _bmCountCache = { src: s.bookmarks, map };
     return map;
   },
 };
