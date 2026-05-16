@@ -1,4 +1,15 @@
-import { useEffect, useRef, memo } from 'react';
+/**
+ * SelectionToolbar — floating bold/italic/highlight bar above a text selection.
+ *
+ * Visually identical to the previous implementation; minor cleanup:
+ *  - Memoized clamp computation.
+ *  - Pulled the inline ToolBtn into a typed sub-component.
+ *  - useEffect now uses requestAnimationFrame instead of setTimeout(100) so
+ *    we still skip the same click that opened us, but we resolve a frame later
+ *    rather than waiting an arbitrary 100 ms.
+ */
+
+import { useEffect, useRef, memo, useMemo } from 'react';
 
 type Props = {
   x: number;
@@ -13,9 +24,13 @@ type Props = {
   onDismiss: () => void;
 };
 
-function ToolBtn({
-  label, active, title, onClick,
-}: { label: string; active: boolean; title: string; onClick: () => void }) {
+const TOOLBAR_W = 220;
+const TOOLBAR_H = 44;
+const GAP = 10;
+
+function ToolBtn({ label, active, title, onClick }: {
+  label: string; active: boolean; title: string; onClick: () => void;
+}) {
   return (
     <button
       onMouseDown={e => { e.preventDefault(); onClick(); }}
@@ -33,27 +48,38 @@ function ToolBtn({
 }
 
 export const SelectionToolbar = memo(function SelectionToolbar({
-  x, y, isBold, isItalic, isHighlight, onBold, onItalic, onHighlight, onClear, onDismiss,
+  x, y, isBold, isItalic, isHighlight,
+  onBold, onItalic, onHighlight, onClear, onDismiss,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Adjust position to stay within viewport
-  const TOOLBAR_W = 220;
-  const TOOLBAR_H = 44;
-  const GAP = 10;
-
-  const clampedX = Math.max(GAP, Math.min(x - TOOLBAR_W / 2, window.innerWidth - TOOLBAR_W - GAP));
-  const clampedY = y - TOOLBAR_H - GAP > 0 ? y - TOOLBAR_H - GAP : y + GAP + 24;
-
-  useEffect(() => {
-    const handler = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onDismiss();
-      }
+  const { left, top, arrowLeft, arrowOnTop } = useMemo(() => {
+    const l = Math.max(GAP, Math.min(x - TOOLBAR_W / 2, window.innerWidth - TOOLBAR_W - GAP));
+    const fitsAbove = y - TOOLBAR_H - GAP > 0;
+    return {
+      left: l,
+      top: fitsAbove ? y - TOOLBAR_H - GAP : y + GAP + 24,
+      arrowLeft: Math.min(Math.max(x - l - 6, 12), TOOLBAR_W - 24),
+      arrowOnTop: !fitsAbove,
     };
-    // Slight delay so we don't immediately dismiss from the same click that opened
-    const id = setTimeout(() => document.addEventListener('pointerdown', handler), 100);
-    return () => { clearTimeout(id); document.removeEventListener('pointerdown', handler); };
+  }, [x, y]);
+
+  // Dismiss on outside click. We wait for the next frame so the same pointer
+  // event that opened the toolbar doesn't immediately close it.
+  useEffect(() => {
+    let attached = false;
+    let raf = 0;
+    const handler = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onDismiss();
+    };
+    raf = requestAnimationFrame(() => {
+      document.addEventListener('pointerdown', handler);
+      attached = true;
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      if (attached) document.removeEventListener('pointerdown', handler);
+    };
   }, [onDismiss]);
 
   const hasAny = isBold || isItalic || isHighlight;
@@ -62,23 +88,20 @@ export const SelectionToolbar = memo(function SelectionToolbar({
     <div
       ref={ref}
       className="fixed z-[200] flex items-center gap-0.5 px-1.5 py-1.5 rounded-2xl bg-card/95 backdrop-blur-xl border border-border/50 shadow-xl"
-      style={{ left: clampedX, top: clampedY }}
+      style={{ left, top }}
     >
-      {/* Indicator triangle */}
       <div
         className="absolute w-2.5 h-2.5 bg-card border-l border-t border-border/50 rotate-45"
         style={{
-          bottom: y - TOOLBAR_H - GAP > 0 ? '-5px' : 'auto',
-          top: y - TOOLBAR_H - GAP > 0 ? 'auto' : '-5px',
-          left: Math.min(Math.max(x - clampedX - 6, 12), TOOLBAR_W - 24),
-          transform: y - TOOLBAR_H - GAP > 0 ? 'rotate(225deg)' : 'rotate(45deg)',
+          bottom: arrowOnTop ? 'auto' : '-5px',
+          top: arrowOnTop ? '-5px' : 'auto',
+          left: arrowLeft,
+          transform: arrowOnTop ? 'rotate(45deg)' : 'rotate(225deg)',
         }}
       />
-
-      <ToolBtn label="B" active={isBold}      title="加粗"  onClick={onBold} />
-      <ToolBtn label="I" active={isItalic}    title="斜体"  onClick={onItalic} />
-      <ToolBtn label="H" active={isHighlight} title="高亮"  onClick={onHighlight} />
-
+      <ToolBtn label="B" active={isBold}      title="加粗" onClick={onBold} />
+      <ToolBtn label="I" active={isItalic}    title="斜体" onClick={onItalic} />
+      <ToolBtn label="H" active={isHighlight} title="高亮" onClick={onHighlight} />
       {hasAny && (
         <>
           <div className="w-px h-5 bg-border/50 mx-0.5" />

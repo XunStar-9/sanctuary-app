@@ -1,29 +1,37 @@
+/**
+ * BookReader — full-screen reading view for an active book.
+ *
+ * Subscribes to booksStore (bookmarks/progress) and settingsStore (typography).
+ * Layout, gestures, and feature set match the original; significant cleanup:
+ *  - Toolbar/progress-bar split into sub-components.
+ *  - Bookmark "jump" race-condition between the chapter-restore effect and
+ *    the imperative scrollTop write is unchanged behaviorally but more clearly
+ *    expressed via a single `pendingJumpRef` guard.
+ */
+
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import { ArrowLeft, Bookmark, BookmarkCheck, List, ChevronLeft, ChevronRight, X, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Book, BookMark, ReadingProgress } from '@/lib/types';
-import type { FontSize, LineHeight, EditorFont } from '@/lib/types';
+import type { Book, BookMark, FontSize, LineHeight, EditorFont } from '@/lib/types';
+import { useStore } from '@/lib/store';
+import { settingsStore } from '@/stores/settingsStore';
+import { booksStore, booksActions, booksSelectors } from '@/stores/booksStore';
 
-const FONT_SIZE_MAP: Record<FontSize, string>    = { sm: 'text-[16px]', md: 'text-[18px]', lg: 'text-[21px]' };
-const LINE_HEIGHT_MAP: Record<LineHeight, string> = { tight: 'leading-[1.9]', normal: 'leading-[2.4]', relaxed: 'leading-[3.0]' };
-const BM_DATE_FMT = new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-type Props = {
-  book: Book;
-  bookmarks: BookMark[];
-  progress: ReadingProgress | null;
-  fontSize: FontSize;
-  lineHeight: LineHeight;
-  editorFont: EditorFont;
-  onBack: () => void;
-  onSaveProgress: (bookId: string, chapterId: string, position: number) => void;
-  onAddBookmark: (bookId: string, chapterId: string, position: number, label: string) => void;
-  onRemoveBookmark: (id: string) => void;
+const FONT_SIZE_MAP:   Record<FontSize, string>   = {
+  sm: 'text-[16px]', md: 'text-[18px]', lg: 'text-[21px]',
 };
+const LINE_HEIGHT_MAP: Record<LineHeight, string> = {
+  tight: 'leading-[1.9]', normal: 'leading-[2.4]', relaxed: 'leading-[3.0]',
+};
+const BM_DATE_FMT = new Intl.DateTimeFormat('zh-CN', {
+  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+});
 
 function normalizeForCompare(s: string): string {
   return s.replace(/[\s\u3000·\-—–:：.。,，、]+/g, '').toLowerCase();
 }
+
+/* ── Paragraph rendering ─────────────────────────────────────────────────── */
 
 function ContentParagraphs({ content, chapterTitle, fontSize, lineHeight, editorFont }: {
   content: string;
@@ -39,8 +47,12 @@ function ContentParagraphs({ content, chapterTitle, fontSize, lineHeight, editor
     for (const block of blocks) {
       const trimmed = block.trim();
       if (!trimmed) continue;
+      // Suppress a chapter title that's duplicated as the first paragraph.
       const paraNorm = normalizeForCompare(trimmed);
-      if (result.length === 0 && titleNorm && (paraNorm === titleNorm || titleNorm.includes(paraNorm) || paraNorm.includes(titleNorm))) continue;
+      if (
+        result.length === 0 && titleNorm &&
+        (paraNorm === titleNorm || titleNorm.includes(paraNorm) || paraNorm.includes(titleNorm))
+      ) continue;
       result.push(trimmed);
     }
     return result;
@@ -50,7 +62,7 @@ function ContentParagraphs({ content, chapterTitle, fontSize, lineHeight, editor
     FONT_SIZE_MAP[fontSize],
     LINE_HEIGHT_MAP[lineHeight],
     editorFont === 'serif' ? 'font-serif' : 'font-sans',
-    'text-foreground/85 selection:bg-primary/20'
+    'text-foreground/85 selection:bg-primary/20',
   );
 
   return (
@@ -75,35 +87,261 @@ function ContentParagraphs({ content, chapterTitle, fontSize, lineHeight, editor
   );
 }
 
-export const BookReader = memo(function BookReader({
-  book, bookmarks, progress,
-  fontSize, lineHeight, editorFont,
-  onBack, onSaveProgress, onAddBookmark, onRemoveBookmark,
-}: Props) {
-  const [chapterIdx,     setChapterIdx]     = useState<number>(() => {
+/* ── Toolbar / Progress bar ─────────────────────────────────────────────── */
+
+function TopToolbar({
+  bookTitle, chapterTitle, isBookmarked, panelOpen, visible,
+  onBack, onToggleBookmark, onTogglePanel,
+}: {
+  bookTitle: string;
+  chapterTitle: string;
+  isBookmarked: boolean;
+  panelOpen: boolean;
+  visible: boolean;
+  onBack: () => void;
+  onToggleBookmark: () => void;
+  onTogglePanel: () => void;
+}) {
+  return (
+    <div className={cn(
+      'absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-4 h-14 pointer-events-none',
+      'bg-gradient-to-b from-background via-background/80 to-transparent',
+      'transition-all duration-300',
+      visible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2',
+    )}>
+      <button
+        onClick={e => { e.stopPropagation(); onBack(); }}
+        className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto"
+      >
+        <ArrowLeft className="w-4 h-4" />
+      </button>
+      <div className="flex-1 min-w-0 px-1 pointer-events-auto">
+        <p className="text-[13px] font-medium text-foreground truncate leading-tight">{bookTitle}</p>
+        <p className="text-[11px] font-sans text-muted-foreground/70 truncate leading-tight">{chapterTitle}</p>
+      </div>
+      <button
+        onClick={e => { e.stopPropagation(); onToggleBookmark(); }}
+        title={isBookmarked ? '已添加书签' : '添加书签'}
+        className={cn(
+          'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto',
+          isBookmarked ? 'text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
+        )}
+      >
+        {isBookmarked ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+      </button>
+      <button
+        onClick={e => { e.stopPropagation(); onTogglePanel(); }}
+        className={cn(
+          'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto',
+          panelOpen ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
+        )}
+      >
+        <List className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function ProgressBar({
+  visible, scrollPct, chapterIdx, totalChapters, onPrev, onNext,
+}: {
+  visible: boolean;
+  scrollPct: number;
+  chapterIdx: number;
+  totalChapters: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className={cn(
+      'absolute bottom-0 left-0 right-0 z-10 px-4 py-3 pointer-events-none',
+      'bg-gradient-to-t from-background via-background/80 to-transparent',
+      'transition-all duration-300',
+      visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2',
+    )}>
+      <div className="h-[2px] bg-muted/40 rounded-full mb-3 overflow-hidden">
+        <div className="h-full bg-primary/50 rounded-full transition-all duration-500" style={{ width: `${scrollPct}%` }} />
+      </div>
+      <div className="flex items-center justify-between pointer-events-auto">
+        <button
+          onClick={e => { e.stopPropagation(); onPrev(); }}
+          disabled={chapterIdx === 0}
+          className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95 disabled:opacity-30"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" /> 上一章
+        </button>
+        <span className="text-[11px] font-sans text-muted-foreground/50">
+          {chapterIdx + 1} / {totalChapters}
+          {scrollPct > 0 && ` · ${Math.round(scrollPct)}%`}
+        </span>
+        <button
+          onClick={e => { e.stopPropagation(); onNext(); }}
+          disabled={chapterIdx === totalChapters - 1}
+          className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95 disabled:opacity-30"
+        >
+          下一章 <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Side panel (chapters / bookmarks tabs) ─────────────────────────────── */
+
+function SidePanel({
+  open, onClose, book, chapterIdx, bookmarks,
+  onSelectChapter, onJumpBookmark, onRemoveBookmark,
+}: {
+  open: boolean;
+  onClose: () => void;
+  book: Book;
+  chapterIdx: number;
+  bookmarks: BookMark[];
+  onSelectChapter: (idx: number) => void;
+  onJumpBookmark: (bm: BookMark) => void;
+  onRemoveBookmark: (id: string) => void;
+}) {
+  const [tab, setTab] = useState<'chapters' | 'bookmarks'>('chapters');
+
+  return (
+    <>
+      <div
+        data-panel
+        onClick={e => { e.stopPropagation(); onClose(); }}
+        className={cn(
+          'absolute inset-0 z-20 bg-black/10 backdrop-blur-[2px] transition-opacity duration-300',
+          open ? 'opacity-100' : 'opacity-0 pointer-events-none',
+        )}
+      />
+      <div
+        data-panel
+        className={cn(
+          'absolute top-0 right-0 bottom-0 z-30 w-72 bg-card/98 backdrop-blur-xl border-l border-border/40 flex flex-col shadow-2xl',
+          'transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]',
+          open ? 'translate-x-0' : 'translate-x-full',
+        )}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
+          <div className="flex gap-1 bg-muted/50 rounded-xl p-0.5">
+            {(['chapters', 'bookmarks'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-[13px] font-sans transition-all duration-150 active:scale-95',
+                  tab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {t === 'chapters' ? '目录' : `书签${bookmarks.length ? ` (${bookmarks.length})` : ''}`}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-150 active:scale-90 shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto overscroll-contain">
+          {tab === 'chapters' ? (
+            <div className="py-2">
+              {book.chapters.map((ch, idx) => (
+                <button
+                  key={ch.id}
+                  onClick={() => onSelectChapter(idx)}
+                  className={cn(
+                    'w-full text-left px-4 py-3 transition-colors border-l-2 text-[13px] font-sans',
+                    idx === chapterIdx
+                      ? 'border-primary bg-primary/10 text-foreground font-medium'
+                      : 'border-transparent text-foreground/60 hover:bg-muted/40 hover:text-foreground',
+                  )}
+                >
+                  <span className="line-clamp-2 leading-snug">{ch.title}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="py-2">
+              {bookmarks.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 px-4 gap-3">
+                  <Bookmark className="w-8 h-8 text-muted-foreground/20" />
+                  <p className="text-[13px] font-sans text-muted-foreground/50 text-center">
+                    点击顶部书签图标<br />在当前位置添加书签
+                  </p>
+                </div>
+              )}
+              {bookmarks.map(bm => {
+                const bmChapter = book.chapters.find(c => c.id === bm.chapterId);
+                const date = BM_DATE_FMT.format(new Date(bm.createdAt));
+                return (
+                  <div
+                    key={bm.id}
+                    className="flex items-start gap-2 px-4 py-3 hover:bg-muted/30 transition-colors group border-b border-border/20 last:border-0"
+                  >
+                    <button onClick={() => onJumpBookmark(bm)} className="flex-1 text-left min-w-0">
+                      <p className="text-[13px] font-medium text-foreground line-clamp-1 leading-snug">
+                        {bmChapter?.title ?? ''}
+                      </p>
+                      <p className="text-[11px] font-sans text-muted-foreground/60 mt-0.5">
+                        {Math.round(bm.position)}% · {date}
+                      </p>
+                    </button>
+                    <button
+                      onClick={() => onRemoveBookmark(bm.id)}
+                      className="opacity-0 group-hover:opacity-100 mt-0.5 p-1 rounded-md text-muted-foreground hover:text-destructive transition-all shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ── BookReader entry ───────────────────────────────────────────────────── */
+
+type Props = { book: Book };
+
+export const BookReader = memo(function BookReader({ book }: Props) {
+  const fontSize         = useStore(settingsStore, s => s.fontSize);
+  const lineHeight       = useStore(settingsStore, s => s.lineHeight);
+  const editorFont       = useStore(settingsStore, s => s.editorFont);
+  const bookmarks        = useStore(booksStore,    s => booksSelectors.activeBookmarks(s));
+  const progress         = useStore(booksStore,    s => booksSelectors.activeBookProgress(s));
+
+  const [chapterIdx, setChapterIdx] = useState<number>(() => {
     if (!progress) return 0;
     const idx = book.chapters.findIndex(c => c.id === progress.chapterId);
     return idx >= 0 ? idx : 0;
   });
-  const [scrollPct,      setScrollPct]      = useState(progress?.position ?? 0);
+  const [scrollPct, setScrollPct] = useState(progress?.position ?? 0);
   const [toolbarVisible, setToolbarVisible] = useState(true);
-  const [panelOpen,      setPanelOpen]      = useState(false);
-  const [panelTab,       setPanelTab]       = useState<'chapters' | 'bookmarks'>('chapters');
+  const [panelOpen, setPanelOpen] = useState(false);
 
-  const contentRef    = useRef<HTMLDivElement>(null);
-  const hideTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollPctRef  = useRef(scrollPct);
+  const contentRef   = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollPctRef = useRef(scrollPct);
   scrollPctRef.current = scrollPct;
+  /** Set to (chapterId, position) when a bookmark jump is in flight, so the
+   *  chapter-restore effect knows to defer to the imperative scroll write. */
+  const pendingJumpRef = useRef<{ chapterId: string; position: number } | null>(null);
 
-  const chapter       = book.chapters[chapterIdx];
+  const chapter = book.chapters[chapterIdx];
   const totalChapters = book.chapters.length;
 
   const isBookmarked = useMemo(
     () => bookmarks.some(
-      b => b.bookId === book.id && b.chapterId === chapter?.id && Math.abs(b.position - scrollPct) < 3
+      b => b.chapterId === chapter?.id && Math.abs(b.position - scrollPct) < 3,
     ),
-    [bookmarks, book.id, chapter?.id, scrollPct],
+    [bookmarks, chapter?.id, scrollPct],
   );
 
   const showToolbar = useCallback(() => {
@@ -112,22 +350,19 @@ export const BookReader = memo(function BookReader({
     hideTimerRef.current = setTimeout(() => setToolbarVisible(false), 3500);
   }, []);
 
+  // Mount: show toolbar; unmount: clear all timers.
   useEffect(() => {
     showToolbar();
     return () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showToolbar]);
 
-  // Track pending bookmark jump so chapter-restore effect can defer to it
-  const pendingJumpRef = useRef<{ chapterId: string; position: number } | null>(null);
-
-  // Restore scroll position on chapter change
+  // Restore scroll position on chapter change (unless a bookmark jump is in flight).
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
-    // If a bookmark jump was just triggered, let it set the scroll position itself
     if (pendingJumpRef.current && pendingJumpRef.current.chapterId === chapter?.id) return;
     const restorePos = progress?.chapterId === chapter?.id ? (progress?.position ?? 0) : 0;
     if (restorePos > 0) {
@@ -137,7 +372,10 @@ export const BookReader = memo(function BookReader({
     } else {
       el.scrollTop = 0;
     }
-  }, [chapterIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Intentionally only depend on chapterIdx — restoring on every progress
+    // update would fight the user's scrolling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterIdx]);
 
   const chapterId = chapter?.id;
   const handleScroll = useCallback(() => {
@@ -149,9 +387,9 @@ export const BookReader = memo(function BookReader({
     setScrollPct(pct);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      if (chapterId) onSaveProgress(book.id, chapterId, pct);
+      if (chapterId) booksActions.saveProgress(book.id, chapterId, pct);
     }, 300);
-  }, [book.id, chapterId, onSaveProgress]);
+  }, [book.id, chapterId]);
 
   const handleContentClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as Element).closest('[data-panel]')) return;
@@ -165,35 +403,30 @@ export const BookReader = memo(function BookReader({
     setPanelOpen(false);
   }, []);
 
-  // Use functional updaters to avoid stale chapterIdx in closures
+  // Functional updaters → no stale chapterIdx.
   const handlePrevChapter = useCallback(() => {
     setChapterIdx(prev => {
-      if (prev > 0) {
-        setScrollPct(0);
-        setPanelOpen(false);
-        return prev - 1;
-      }
-      return prev;
+      if (prev <= 0) return prev;
+      setScrollPct(0);
+      setPanelOpen(false);
+      return prev - 1;
     });
   }, []);
 
   const handleNextChapter = useCallback(() => {
     setChapterIdx(prev => {
-      if (prev < totalChapters - 1) {
-        setScrollPct(0);
-        setPanelOpen(false);
-        return prev + 1;
-      }
-      return prev;
+      if (prev >= totalChapters - 1) return prev;
+      setScrollPct(0);
+      setPanelOpen(false);
+      return prev + 1;
     });
   }, [totalChapters]);
 
   const handleAddBookmark = useCallback(() => {
     if (!chapter) return;
     const pct = scrollPctRef.current;
-    const label = `${chapter.title} · ${Math.round(pct)}%`;
-    onAddBookmark(book.id, chapter.id, pct, label);
-  }, [book.id, chapter, onAddBookmark]);
+    booksActions.addBookmark(book.id, chapter.id, pct, `${chapter.title} · ${Math.round(pct)}%`);
+  }, [book.id, chapter]);
 
   const handleJumpBookmark = useCallback((bm: BookMark) => {
     const idx = book.chapters.findIndex(c => c.id === bm.chapterId);
@@ -201,8 +434,6 @@ export const BookReader = memo(function BookReader({
     pendingJumpRef.current = { chapterId: bm.chapterId, position: bm.position };
     setChapterIdx(idx);
     setPanelOpen(false);
-    // Use rAF to wait for DOM update; guarded by pendingJumpRef to avoid races
-    // with the chapter-restore effect.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const el = contentRef.current;
@@ -216,53 +447,25 @@ export const BookReader = memo(function BookReader({
   if (!chapter) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col" onClick={handleContentClick}>
+    <div className="absolute inset-0 flex flex-col" onClick={handleContentClick}>
+      <TopToolbar
+        bookTitle={book.title}
+        chapterTitle={chapter.title}
+        isBookmarked={isBookmarked}
+        panelOpen={panelOpen}
+        visible={toolbarVisible}
+        onBack={() => booksActions.clearActive()}
+        onToggleBookmark={handleAddBookmark}
+        onTogglePanel={() => { setPanelOpen(p => !p); showToolbar(); }}
+      />
 
-      {/* ── Top toolbar ── pointer-events-none on gradient, auto on buttons */}
-      <div className={cn(
-        "absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-4 h-14 pointer-events-none",
-        "bg-gradient-to-b from-background via-background/80 to-transparent",
-        "transition-all duration-300",
-        toolbarVisible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
-      )}>
-        <button onClick={e => { e.stopPropagation(); onBack(); }}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto">
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div className="flex-1 min-w-0 px-1 pointer-events-auto">
-          <p className="text-[13px] font-medium text-foreground truncate leading-tight">{book.title}</p>
-          <p className="text-[11px] font-sans text-muted-foreground/70 truncate leading-tight">{chapter.title}</p>
-        </div>
-        <button
-          onClick={e => { e.stopPropagation(); handleAddBookmark(); }}
-          title={isBookmarked ? '已添加书签' : '添加书签'}
-          className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto",
-            isBookmarked ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-          )}>
-          {isBookmarked ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-        </button>
-        <button onClick={e => { e.stopPropagation(); setPanelOpen(p => !p); showToolbar(); }}
-          className={cn(
-            "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 active:scale-90 shrink-0 pointer-events-auto",
-            panelOpen ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-          )}>
-          <List className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* ── Reading content ── */}
-      <div
-        ref={contentRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overscroll-none pt-16 pb-28"
-      >
+      <div ref={contentRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overscroll-none pt-16 pb-28">
         <div className="max-w-[680px] mx-auto px-6 md:px-14 py-8">
           <div className="flex flex-col items-center mb-14 mt-4">
             <div className="w-8 h-[1px] bg-primary/25 mb-6" />
             <h2 className={cn(
-              "font-serif font-semibold text-foreground text-center leading-snug tracking-wider",
-              fontSize === 'lg' ? 'text-2xl' : 'text-xl'
+              'font-serif font-semibold text-foreground text-center leading-snug tracking-wider',
+              fontSize === 'lg' ? 'text-2xl' : 'text-xl',
             )}>
               {chapter.title}
             </h2>
@@ -277,19 +480,20 @@ export const BookReader = memo(function BookReader({
             editorFont={editorFont}
           />
 
-          {/* Chapter navigation at bottom of content */}
           <div className="mt-16 flex flex-col gap-3">
             {chapterIdx < totalChapters - 1 && (
               <button
                 onClick={e => { e.stopPropagation(); handleNextChapter(); }}
-                className="relative z-20 w-full py-3.5 rounded-xl border border-border/40 text-sm font-sans text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors">
+                className="relative z-20 w-full py-3.5 rounded-xl border border-border/40 text-sm font-sans text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+              >
                 下一章：{book.chapters[chapterIdx + 1]?.title}
               </button>
             )}
             {chapterIdx > 0 && (
               <button
                 onClick={e => { e.stopPropagation(); handlePrevChapter(); }}
-                className="relative z-20 w-full py-3 rounded-xl text-[13px] font-sans text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                className="relative z-20 w-full py-3 rounded-xl text-[13px] font-sans text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
                 上一章：{book.chapters[chapterIdx - 1]?.title}
               </button>
             )}
@@ -297,123 +501,25 @@ export const BookReader = memo(function BookReader({
         </div>
       </div>
 
-      {/* ── Bottom progress bar ── pointer-events-none on gradient, auto on buttons */}
-      <div className={cn(
-        "absolute bottom-0 left-0 right-0 z-10 px-4 py-3 pointer-events-none",
-        "bg-gradient-to-t from-background via-background/80 to-transparent",
-        "transition-all duration-300",
-        toolbarVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
-      )}>
-        <div className="h-[2px] bg-muted/40 rounded-full mb-3 overflow-hidden">
-          <div
-            className="h-full bg-primary/50 rounded-full transition-all duration-500"
-            style={{ width: `${scrollPct}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-between pointer-events-auto">
-          <button onClick={e => { e.stopPropagation(); handlePrevChapter(); }}
-            disabled={chapterIdx === 0}
-            className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95 disabled:opacity-30">
-            <ChevronLeft className="w-3.5 h-3.5" /> 上一章
-          </button>
-          <span className="text-[11px] font-sans text-muted-foreground/50">
-            {chapterIdx + 1} / {totalChapters}
-            {scrollPct > 0 && ` · ${Math.round(scrollPct)}%`}
-          </span>
-          <button onClick={e => { e.stopPropagation(); handleNextChapter(); }}
-            disabled={chapterIdx === totalChapters - 1}
-            className="flex items-center gap-1 text-[12px] font-sans text-muted-foreground hover:text-foreground transition-all duration-150 active:scale-95 disabled:opacity-30">
-            下一章 <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
+      <ProgressBar
+        visible={toolbarVisible}
+        scrollPct={scrollPct}
+        chapterIdx={chapterIdx}
+        totalChapters={totalChapters}
+        onPrev={handlePrevChapter}
+        onNext={handleNextChapter}
+      />
 
-      {/* ── Chapter / Bookmark side panel ── */}
-      <>
-        <div
-          data-panel
-          onClick={e => { e.stopPropagation(); setPanelOpen(false); }}
-          className={cn(
-            "absolute inset-0 z-20 bg-black/10 backdrop-blur-[2px] transition-opacity duration-300",
-            panelOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-          )}
-        />
-        <div
-          data-panel
-          className={cn(
-            "absolute top-0 right-0 bottom-0 z-30 w-72 bg-card/98 backdrop-blur-xl border-l border-border/40 flex flex-col shadow-2xl",
-            "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-            panelOpen ? "translate-x-0" : "translate-x-full"
-          )}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 shrink-0">
-            <div className="flex gap-1 bg-muted/50 rounded-xl p-0.5">
-              {(['chapters', 'bookmarks'] as const).map(tab => (
-                <button key={tab} onClick={() => setPanelTab(tab)}
-                  className={cn(
-                    "px-3 py-1.5 rounded-lg text-[13px] font-sans transition-all duration-150 active:scale-95",
-                    panelTab === tab ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                  )}>
-                  {tab === 'chapters' ? '目录' : `书签${bookmarks.length ? ` (${bookmarks.length})` : ''}`}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setPanelOpen(false)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-150 active:scale-90 shrink-0">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto overscroll-contain">
-            {panelTab === 'chapters' && (
-              <div className="py-2">
-                {book.chapters.map((ch, idx) => (
-                  <button key={ch.id} onClick={() => goToChapter(idx)}
-                    className={cn(
-                      "w-full text-left px-4 py-3 transition-colors border-l-2 text-[13px] font-sans",
-                      idx === chapterIdx
-                        ? "border-primary bg-primary/10 text-foreground font-medium"
-                        : "border-transparent text-foreground/60 hover:bg-muted/40 hover:text-foreground"
-                    )}>
-                    <span className="line-clamp-2 leading-snug">{ch.title}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {panelTab === 'bookmarks' && (
-              <div className="py-2">
-                {bookmarks.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-12 px-4 gap-3">
-                    <Bookmark className="w-8 h-8 text-muted-foreground/20" />
-                    <p className="text-[13px] font-sans text-muted-foreground/50 text-center">
-                      点击顶部书签图标<br />在当前位置添加书签
-                    </p>
-                  </div>
-                )}
-                {bookmarks.map(bm => {
-                  const bmChapter = book.chapters.find(c => c.id === bm.chapterId);
-                  const date = BM_DATE_FMT.format(new Date(bm.createdAt));
-                  return (
-                    <div key={bm.id}
-                      className="flex items-start gap-2 px-4 py-3 hover:bg-muted/30 transition-colors group border-b border-border/20 last:border-0">
-                      <button onClick={() => handleJumpBookmark(bm)} className="flex-1 text-left min-w-0">
-                        <p className="text-[13px] font-medium text-foreground line-clamp-1 leading-snug">{bmChapter?.title ?? ''}</p>
-                        <p className="text-[11px] font-sans text-muted-foreground/60 mt-0.5">
-                          {Math.round(bm.position)}% · {date}
-                        </p>
-                      </button>
-                      <button onClick={() => onRemoveBookmark(bm.id)}
-                        className="opacity-0 group-hover:opacity-100 mt-0.5 p-1 rounded-md text-muted-foreground hover:text-destructive transition-all shrink-0">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </>
+      <SidePanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        book={book}
+        chapterIdx={chapterIdx}
+        bookmarks={bookmarks}
+        onSelectChapter={goToChapter}
+        onJumpBookmark={handleJumpBookmark}
+        onRemoveBookmark={booksActions.removeBookmark}
+      />
     </div>
   );
 });

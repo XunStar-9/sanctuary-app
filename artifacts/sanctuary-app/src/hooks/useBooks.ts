@@ -1,153 +1,35 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import type { Book, BookMark, ReadingProgress } from '@/lib/types';
-import { parseTxt, parseEpub } from '@/utils/bookParser';
+/**
+ * useBooks — facade over `booksStore`. Returns the same shape the old hook did,
+ * plus memoized derived values for the active book / its bookmarks / its progress.
+ */
 
-function loadJson<T>(key: string, fallback: T): T {
-  try {
-    const v = localStorage.getItem(key);
-    return v ? JSON.parse(v) : fallback;
-  } catch { return fallback; }
-}
+import { useMemo } from 'react';
+import { useStore } from '@/lib/store';
+import { booksStore, booksActions, booksSelectors, type BooksState } from '@/stores/booksStore';
 
-function saveJson(key: string, val: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* localStorage full */ }
-}
+const pickAll = (s: BooksState) => s;
 
 export function useBooks() {
-  const [books,     setBooks]     = useState<Book[]>(() => loadJson('sanctuary_books', []));
-  const [bookmarks, setBookmarks] = useState<BookMark[]>(() => loadJson('sanctuary_bookmarks', []));
-  const [progress,  setProgress]  = useState<ReadingProgress | null>(() => loadJson('sanctuary_reading_progress', null));
-  const [activeBookId, setActiveBookId] = useState<string | null>(() => loadJson('sanctuary_active_book', null));
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
+  const s = useStore(booksStore, pickAll);
 
-  const bookSaveTimer = useRef(0);
-  useEffect(() => {
-    clearTimeout(bookSaveTimer.current);
-    bookSaveTimer.current = window.setTimeout(() => {
-      saveJson('sanctuary_books', books);
-    }, 500);
-    return () => clearTimeout(bookSaveTimer.current);
-  }, [books]);
-
-  // Auto-correct stale activeBookId: if the saved active book no longer exists
-  // in the books list (e.g. it was removed, or books failed to persist before
-  // closing the tab), reset to null so we don't show a phantom book.
-  useEffect(() => {
-    if (activeBookId && !books.some(b => b.id === activeBookId)) {
-      setActiveBookId(null);
-      saveJson('sanctuary_active_book', null);
-    }
-  }, [books, activeBookId]);
-
-  const activeBook = useMemo(() => books.find(b => b.id === activeBookId) ?? null, [books, activeBookId]);
-
-  const bookProgress = useMemo(() =>
-    progress?.bookId === activeBookId ? progress : null,
-    [progress, activeBookId]
-  );
-
-  const activeBookmarks = useMemo(() =>
-    bookmarks.filter(b => b.bookId === activeBookId),
-    [bookmarks, activeBookId]
-  );
-
-  const importBook = useCallback(async (file: File) => {
-    setImporting(true);
-    setImportError(null);
-    try {
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      let parsed: Awaited<ReturnType<typeof parseTxt>>;
-      if (ext === 'epub') {
-        parsed = await parseEpub(file);
-      } else if (ext === 'txt' || ext === 'md') {
-        parsed = await parseTxt(file);
-      } else {
-        throw new Error(`Unsupported format: .${ext}`);
-      }
-      const book: Book = {
-        id: `book-${Date.now()}`,
-        title: parsed.title,
-        author: parsed.author,
-        format: ext === 'epub' ? 'epub' : 'txt',
-        chapters: parsed.chapters,
-        addedAt: new Date().toISOString(),
-      };
-      setBooks(prev => {
-        const next = [book, ...prev];
-        // Persist immediately so a tab close before the debounced save fires
-        // doesn't lose the book (and leave a stale activeBookId pointing nowhere).
-        saveJson('sanctuary_books', next);
-        return next;
-      });
-      setActiveBookId(book.id);
-      saveJson('sanctuary_active_book', book.id);
-      const initialProgress: ReadingProgress = { bookId: book.id, chapterId: book.chapters[0]?.id ?? '', position: 0 };
-      setProgress(initialProgress);
-      saveJson('sanctuary_reading_progress', initialProgress);
-    } catch (e) {
-      setImportError(e instanceof Error ? e.message : 'Import failed');
-    } finally {
-      setImporting(false);
-    }
-  }, []);
-
-  const selectBook = useCallback((bookId: string) => {
-    setActiveBookId(bookId);
-    saveJson('sanctuary_active_book', bookId);
-  }, []);
-
-  const removeBook = useCallback((bookId: string) => {
-    setBooks(prev => {
-      const next = prev.filter(b => b.id !== bookId);
-      saveJson('sanctuary_books', next);
-      return next;
-    });
-    setBookmarks(prev => {
-      const next = prev.filter(b => b.bookId !== bookId);
-      saveJson('sanctuary_bookmarks', next);
-      return next;
-    });
-    setActiveBookId(prev => {
-      const next = prev === bookId ? null : prev;
-      saveJson('sanctuary_active_book', next);
-      return next;
-    });
-  }, []);
-
-  const saveProgress = useCallback((bookId: string, chapterId: string, position: number) => {
-    const p: ReadingProgress = { bookId, chapterId, position };
-    setProgress(p);
-    saveJson('sanctuary_reading_progress', p);
-  }, []);
-
-  const addBookmark = useCallback((bookId: string, chapterId: string, position: number, label: string) => {
-    const bm: BookMark = {
-      id: `bm-${Date.now()}`,
-      bookId, chapterId, position, label,
-      createdAt: new Date().toISOString(),
-    };
-    setBookmarks(prev => {
-      const next = [bm, ...prev];
-      saveJson('sanctuary_bookmarks', next);
-      return next;
-    });
-  }, []);
-
-  const removeBookmark = useCallback((id: string) => {
-    setBookmarks(prev => {
-      const next = prev.filter(b => b.id !== id);
-      saveJson('sanctuary_bookmarks', next);
-      return next;
-    });
-  }, []);
+  const activeBook      = useMemo(() => booksSelectors.activeBook(s),         [s]);
+  const activeBookmarks = useMemo(() => booksSelectors.activeBookmarks(s),    [s]);
+  const progress        = useMemo(() => booksSelectors.activeBookProgress(s), [s]);
 
   return {
-    books, activeBook, activeBookId,
-    bookmarks, activeBookmarks,
-    progress: bookProgress,
-    importing, importError,
-    importBook, selectBook, removeBook,
-    saveProgress, addBookmark, removeBookmark,
+    books:          s.books,
+    activeBook,
+    activeBookId:   s.activeBookId,
+    bookmarks:      s.bookmarks,
+    activeBookmarks,
+    progress,
+    importing:      s.importing,
+    importError:    s.importError,
+    importBook:     booksActions.importBook,
+    selectBook:     booksActions.selectBook,
+    removeBook:     booksActions.removeBook,
+    saveProgress:   booksActions.saveProgress,
+    addBookmark:    booksActions.addBookmark,
+    removeBookmark: booksActions.removeBookmark,
   };
 }
