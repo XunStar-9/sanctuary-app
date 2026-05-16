@@ -6,7 +6,7 @@
  */
 
 import { useEffect, memo } from 'react';
-import { X, Type } from 'lucide-react';
+import { X, Type, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { THEMES } from '@/lib/types';
@@ -14,6 +14,9 @@ import type { ThemeId, FontSize, LineHeight, EditorFont } from '@/lib/types';
 import { useStore } from '@/lib/store';
 import { settingsStore, settingsActions } from '@/stores/settingsStore';
 import { uiStore, uiActions } from '@/stores/uiStore';
+import {
+  sleepTimerStore, sleepTimerActions, formatSleepCountdown,
+} from '@/stores/sleepTimerStore';
 
 function Section({ title, children, action }: {
   title: string;
@@ -154,6 +157,93 @@ const FontFamilySection = memo(function FontFamilySection() {
   );
 });
 
+/* ── Sleep timer ───────────────────────────────────────────────────────── */
+
+/**
+ * Compact sleep-timer controls. The active state is shown both as a chip in
+ * the music dock (for at-a-glance feedback) and here (for full controls).
+ *
+ * Two mutually-exclusive modes:
+ *  - Minutes: pause after N minutes (any of: 5, 15, 30, 60, custom slider).
+ *  - Tracks:  pause after N more tracks finish (1, 3, 5).
+ */
+const MINUTE_PRESETS = [5, 15, 30, 60] as const;
+const TRACK_PRESETS  = [1, 3, 5] as const;
+
+const SleepTimerSection = memo(function SleepTimerSection() {
+  const remainingSecs   = useStore(sleepTimerStore, s => s.remainingSecs);
+  const tracksRemaining = useStore(sleepTimerStore, s => s.tracksRemaining);
+  const active = remainingSecs !== null || tracksRemaining !== null;
+  const countdown = formatSleepCountdown(remainingSecs);
+
+  return (
+    <Section
+      title="睡眠定时"
+      action={active ? (
+        <button
+          onClick={sleepTimerActions.cancel}
+          className="text-[10px] font-sans text-muted-foreground/60 hover:text-destructive transition-colors duration-150 active:scale-95"
+        >
+          取消
+        </button>
+      ) : undefined}
+    >
+      {active && (
+        <div className="mb-3 px-3 py-2 rounded-xl bg-primary/10 flex items-center gap-2 text-foreground">
+          <Moon className="w-3.5 h-3.5 text-primary" />
+          <span className="text-[12px] font-sans tabular-nums">
+            {countdown
+              ? `还剩 ${countdown} 后停止`
+              : `在 ${tracksRemaining} 首歌后停止`}
+          </span>
+        </div>
+      )}
+
+      <p className="text-[10px] font-sans text-muted-foreground/60 mb-2">分钟</p>
+      <div className="grid grid-cols-4 gap-1.5 mb-3">
+        {MINUTE_PRESETS.map(m => {
+          const selected = remainingSecs !== null && Math.abs(remainingSecs - m * 60) <= 60;
+          return (
+            <button
+              key={m}
+              onClick={() => sleepTimerActions.setMinutes(m)}
+              className={cn(
+                'py-1.5 rounded-lg text-[12px] font-sans transition-all duration-150 active:scale-95 tabular-nums',
+                selected
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-muted/50 text-foreground/70 hover:bg-muted',
+              )}
+            >
+              {m}m
+            </button>
+          );
+        })}
+      </div>
+
+      <p className="text-[10px] font-sans text-muted-foreground/60 mb-2">曲目</p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {TRACK_PRESETS.map(n => {
+          const selected = tracksRemaining === n;
+          return (
+            <button
+              key={n}
+              onClick={() => sleepTimerActions.setTracks(n)}
+              className={cn(
+                'py-1.5 rounded-lg text-[12px] font-sans transition-all duration-150 active:scale-95',
+                selected
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-muted/50 text-foreground/70 hover:bg-muted',
+              )}
+            >
+              {n} 首
+            </button>
+          );
+        })}
+      </div>
+    </Section>
+  );
+});
+
 export const SettingsPanel = memo(function SettingsPanel() {
   const open = useStore(uiStore, s => s.settingsOpen);
 
@@ -205,6 +295,7 @@ export const SettingsPanel = memo(function SettingsPanel() {
             <FontSizeSection />
             <LineHeightSection />
             <FontFamilySection />
+            <SleepTimerSection />
           </div>
         </ScrollArea>
       </div>

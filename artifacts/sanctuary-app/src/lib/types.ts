@@ -88,6 +88,44 @@ export const GRADIENTS = [
   'from-orange-200 to-red-100',
 ];
 
+/**
+ * Accent colors derived from the gradient's `from-*-200` class.
+ *
+ * Why a static map instead of computing from CSS at runtime?
+ *  - Tailwind colors aren't easily inspectable from the DOM (the class doesn't
+ *    apply to a single element we can read getComputedStyle from).
+ *  - We want this on the engine side too (e.g. for theme-color meta), where
+ *    no DOM is available.
+ *
+ * Saturation/lightness are nudged from Tailwind's pastel `-200` shades down
+ * to a richer mid-tone usable as an accent on top of the player chrome.
+ *
+ * Format: "H S% L%" (Tailwind/CSS-friendly, plug into hsl(var(--song-accent))).
+ */
+const ACCENT_FROM_GRADIENT: Record<string, string> = {
+  'from-violet-200':  '270 60% 60%',
+  'from-pink-200':    '326 70% 60%',
+  'from-rose-200':    '350 70% 60%',
+  'from-sky-200':     '199 80% 55%',
+  'from-amber-200':   '38 90% 55%',
+  'from-emerald-200': '160 55% 45%',
+  'from-indigo-200':  '226 65% 60%',
+  'from-orange-200':  '22 90% 55%',
+};
+
+/**
+ * Extract an accent HSL triplet from a Song's gradient class string.
+ * Falls back to `null` so callers can use the theme primary instead.
+ */
+export function getAccentHsl(gradient: string | undefined | null): string | null {
+  if (!gradient) return null;
+  for (const cls of gradient.split(/\s+/)) {
+    const hit = ACCENT_FROM_GRADIENT[cls];
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export const DEFAULT_NOTES: Note[] = [
   {
     id: '1', title: 'Morning thoughts', date: 'Today, 8:42 AM',

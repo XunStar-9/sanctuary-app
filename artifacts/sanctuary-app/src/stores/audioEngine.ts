@@ -24,10 +24,15 @@ import {
   saveAudioFile, loadAudioFile, removeAudioFile,
   savePlaylistMeta, loadPlaylistMeta,
 } from '@/lib/audioStorage';
+import { historyActions } from '@/stores/historyStore';
 
 const MAX_RETRY = 3;
 const RETRY_BASE_MS = 1000;
 const META_DEBOUNCE = 500;
+
+/** A song must accumulate this many seconds of real-time playback before it
+ *  counts as "played" for the listening-history store. Matches Last.fm's rule. */
+const HISTORY_THRESHOLD_SECS = 30;
 
 function secsToString(s: number): string {
   if (!isFinite(s) || s < 0) return '0:00';
@@ -96,6 +101,26 @@ export class AudioEngine {
   private currentTime = 0;
   private duration = 0;
   private isDragging = false;
+  /** Songs already counted toward listening-history for the current session.
+   *  Reset on advance/select so re-listening to the same track later still
+   *  bubbles it back to the top of the history. */
+  private recordedThisPlay: string | null = null;
+
+  /**
+   * Hooks called when a track ends naturally (not when the user manually skips
+   * or the track loops via repeat). Returning `true` from a hook tells the
+   * engine to *suppress* auto-advance for this transition (used by the sleep
+   * timer when its track-count just hit zero).
+   *
+   * This is a registry rather than a direct import to keep audioEngine free of
+   * dependencies on stores that themselves import audioEngine.
+   */
+  private endHooks: Array<() => boolean> = [];
+
+  registerEndOfTrackHook(hook: () => boolean): () => void {
+    this.endHooks.push(hook);
+    return () => { this.endHooks = this.endHooks.filter(h => h !== hook); };
+  }
 
   constructor() {
     this.el = new Audio();
@@ -205,6 +230,16 @@ export class AudioEngine {
     el.addEventListener('timeupdate', () => {
       if (this.isDragging) return;
       const t = el.currentTime;
+      // Listening-history check: record once per song-play when crossing 30 s.
+      // (Recording is cheap; we still gate by recordedThisPlay so each
+      // advance/select yields at most one entry.)
+      if (t >= HISTORY_THRESHOLD_SECS) {
+        const song = this.playlist[this.currentSongIndex];
+        if (song && this.recordedThisPlay !== song.id) {
+          this.recordedThisPlay = song.id;
+          historyActions.recordPlay(song);
+        }
+      }
       if (Math.abs(t - this.lastReportedTime) < 0.25) return;
       cancelAnimationFrame(this.rafId);
       this.rafId = requestAnimationFrame(() => {
@@ -250,6 +285,16 @@ export class AudioEngine {
         this.safePlay();
         return;
       }
+      // Give end-of-track hooks (e.g. sleep timer) a chance to suppress the
+      // auto-advance. If any returns true, we stop here without queuing the
+      // next song; the hook is expected to have called pause().
+      const suppress = this.endHooks.reduce((acc, h) => h() || acc, false);
+      if (suppress) {
+        this.wantPlay = false;
+        this.isPlaying = false;
+        this.notify();
+        return;
+      }
       this.wantPlay = true;
       this.isPlaying = true;
       this.advance(this.isShuffle ? shufflePick(this.currentSongIndex, len) : (this.currentSongIndex + 1) % len);
@@ -288,6 +333,7 @@ export class AudioEngine {
   private advance(nextIndex: number) {
     this.currentSongIndex = nextIndex;
     this.retryCount = 0;
+    this.recordedThisPlay = null;  // a fresh song-play; allow it to be recorded
     this.clearRetry();
     const song = this.playlist[nextIndex];
     this.currentTime = 0;
@@ -323,6 +369,20 @@ export class AudioEngine {
     } else {
       this.wantPlay = false;
       this.el.pause();
+    }
+  };
+
+  /** Programmatic pause (used by the sleep timer). Idempotent — safe to call
+   *  whether playback has a real src or not. */
+  pause = () => {
+    if (!this.playlist.length) return;
+    this.wantPlay = false;
+    if (this.isPlaying) {
+      this.isPlaying = false;
+      // Only call el.pause when there's a real source attached.
+      const song = this.playlist[this.currentSongIndex];
+      if (song?.src) this.el.pause();
+      this.notify();
     }
   };
 

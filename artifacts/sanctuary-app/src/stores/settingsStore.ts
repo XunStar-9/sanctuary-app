@@ -17,6 +17,10 @@ export type SettingsState = {
   fontSizeNum: number;       // 0 = use preset
   lineHeightNum: number;     // 0 = use preset
   formattingEnabled: boolean;
+  /** UI radius multiplier (1 = default rounding). Range ~0.5–1.5. */
+  radiusScale: number;
+  /** Global font-size multiplier on <html> (1 = default). Range ~0.85–1.25. */
+  globalFontScale: number;
 };
 
 const DEFAULT_SETTINGS: SettingsState = {
@@ -27,6 +31,8 @@ const DEFAULT_SETTINGS: SettingsState = {
   fontSizeNum: 0,
   lineHeightNum: 0,
   formattingEnabled: false,
+  radiusScale: 1,
+  globalFontScale: 1,
 };
 
 const STORAGE_KEY = 'sanctuary_settings';
@@ -89,6 +95,41 @@ settingsStore.subscribe(() => {
   }
 });
 
+/**
+ * Apply UI scaling preferences to the document.
+ *
+ *  - radiusScale → overrides the `--radius` CSS variable. Tailwind's
+ *    `--radius-{sm,md,lg,xl}` are derived from it via calc(), so every
+ *    rounded-* utility scales with this single value.
+ *  - globalFontScale → sets `font-size` on `<html>` as a percentage. Because
+ *    every rem-based size in the app cascades from the root, this scales the
+ *    whole interface uniformly.
+ */
+function applyRadius(scale: number) {
+  // Default radius across the app is 1rem; apply scale on top.
+  document.documentElement.style.setProperty('--radius', `${scale}rem`);
+}
+function applyFontScale(scale: number) {
+  // Browsers default to 16px == 100%; we just set the html font-size.
+  document.documentElement.style.fontSize = `${Math.round(scale * 100)}%`;
+}
+
+applyRadius(settingsStore.getState().radiusScale);
+applyFontScale(settingsStore.getState().globalFontScale);
+let lastRadius = settingsStore.getState().radiusScale;
+let lastFontScale = settingsStore.getState().globalFontScale;
+settingsStore.subscribe(() => {
+  const s = settingsStore.getState();
+  if (s.radiusScale !== lastRadius) {
+    lastRadius = s.radiusScale;
+    applyRadius(s.radiusScale);
+  }
+  if (s.globalFontScale !== lastFontScale) {
+    lastFontScale = s.globalFontScale;
+    applyFontScale(s.globalFontScale);
+  }
+});
+
 /* ── Actions ─────────────────────────────────────────────────────────────── */
 
 export const settingsActions = {
@@ -99,4 +140,10 @@ export const settingsActions = {
   setFontSizeNum:       (v: number)     => settingsStore.set({ fontSizeNum: v }),
   setLineHeightNum:     (v: number)     => settingsStore.set({ lineHeightNum: v }),
   setFormattingEnabled: (v: boolean)    => settingsStore.set({ formattingEnabled: v }),
+  setRadiusScale:       (v: number)     => settingsStore.set({ radiusScale: clamp(v, 0.5, 1.5) }),
+  setGlobalFontScale:   (v: number)     => settingsStore.set({ globalFontScale: clamp(v, 0.85, 1.25) }),
 };
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}

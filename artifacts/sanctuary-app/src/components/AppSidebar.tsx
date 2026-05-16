@@ -14,7 +14,7 @@ import { useState, useCallback, memo } from 'react';
 import {
   X, Plus, Search, Music, Shuffle, SkipBack, Play, Pause, SkipForward,
   Repeat, Upload, Settings, BookOpen, ListMusic, Trash2, Volume2, VolumeX,
-  ChevronUp,
+  ChevronUp, Maximize2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Slider } from '@/components/ui/slider';
@@ -22,6 +22,9 @@ import { useStore } from '@/lib/store';
 import { notesStore, notesActions, notesSelectors } from '@/stores/notesStore';
 import { uiStore, uiActions } from '@/stores/uiStore';
 import { useAudio } from '@/hooks/useAudio';
+import { useSwipe } from '@/hooks/useSwipe';
+import { getAccentHsl } from '@/lib/types';
+import { sleepTimerStore, formatSleepCountdown } from '@/stores/sleepTimerStore';
 
 const BTN_BASE = 'transition-all duration-150 active:scale-90';
 const BTN_ICON = 'flex items-center justify-center rounded-lg transition-all duration-150 active:scale-90';
@@ -139,6 +142,41 @@ function MusicDock({
   onOpenPlaylist,
 }: MusicDockProps) {
   const expanded = useStore(uiStore, s => s.musicExpanded);
+  const sleepRemainingSecs   = useStore(sleepTimerStore, s => s.remainingSecs);
+  const sleepTracksRemaining = useStore(sleepTimerStore, s => s.tracksRemaining);
+  const sleepCountdown       = formatSleepCountdown(sleepRemainingSecs);
+  const sleepLabel = sleepCountdown
+    ? `Sleep · ${sleepCountdown}`
+    : sleepTracksRemaining !== null
+      ? `Sleep · ${sleepTracksRemaining} 首`
+      : null;
+
+  // Per-song accent. Falls back to the theme primary when no accent is mapped
+  // (e.g. the default playlist song or a gradient we don't have a hue for).
+  const accentHsl = getAccentHsl(currentSong?.gradient);
+  const dockStyle = {
+    // CSS custom property scoped to the dock subtree. Buttons read via:
+    //   style={{ background: 'hsl(var(--song-accent))' }}
+    // and similar. We default to the theme primary so nothing breaks when
+    // accent is null.
+    '--song-accent': accentHsl ?? 'var(--primary)',
+  } as React.CSSProperties;
+
+  // Gesture handlers on the collapsed/expanded header row:
+  //   • horizontal swipe → prev/next track
+  //   • swipe up        → expand (if collapsed) / open fullscreen (if expanded)
+  //   • swipe down      → collapse (if expanded)
+  // Click (no swipe) keeps its default toggle behavior; useSwipe.onClickCapture
+  // suppresses the synthetic click after a real swipe.
+  const swipe = useSwipe({
+    onSwipeLeft:  handleNext,
+    onSwipeRight: handlePrev,
+    onSwipeUp:    () => {
+      if (expanded) uiActions.openFullscreenPlayer();
+      else          uiActions.toggleMusic();
+    },
+    onSwipeDown:  () => { if (expanded) uiActions.toggleMusic(); },
+  });
 
   // Empty state: single compact row, dock-height stays minimal.
   if (playlist.length === 0) {
@@ -156,43 +194,59 @@ function MusicDock({
     );
   }
 
-  const stopProp = (e: React.MouseEvent) => e.stopPropagation();
+  const stopProp = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
   return (
-    <div className="border-t border-border/30 shrink-0 select-none">
+    <div className="border-t border-border/30 shrink-0 select-none" style={dockStyle}>
       {/* Always-visible thin progress strip — visual continuity across collapse. */}
       <div className="h-[2px] bg-muted/30">
         <div
-          className="h-full bg-primary/60 transition-[width] duration-200"
-          style={{ width: `${progressPct}%` }}
+          className="h-full transition-[width] duration-200"
+          style={{ width: `${progressPct}%`, background: 'hsl(var(--song-accent) / 0.85)' }}
         />
       </div>
 
-      {/* Header row (always visible). Tapping anywhere on it toggles expanded. */}
+      {/* Header row (always visible). Tapping anywhere on it toggles expanded.
+          Horizontal swipe → prev/next track; vertical swipe → expand/collapse. */}
       <button
         onClick={uiActions.toggleMusic}
-        className="w-full px-5 py-2.5 flex items-center gap-3 hover:bg-muted/30 active:bg-muted/50 transition-colors text-left"
+        onPointerDown={swipe.onPointerDown}
+        onPointerMove={swipe.onPointerMove}
+        onPointerUp={swipe.onPointerUp}
+        onPointerCancel={swipe.onPointerCancel}
+        onClickCapture={swipe.onClickCapture}
+        className="w-full px-5 py-2.5 flex items-center gap-3 hover:bg-muted/30 active:bg-muted/50 transition-colors text-left touch-pan-y"
         aria-expanded={expanded}
         aria-label={expanded ? 'Collapse music player' : 'Expand music player'}
       >
-        <div className={cn(
-          'w-9 h-9 rounded-lg shrink-0 bg-gradient-to-br flex items-center justify-center relative overflow-hidden',
-          currentSong?.gradient ?? 'from-muted to-muted/40',
-        )}>
-          {isPlaying ? (
-            <div className="flex items-end gap-0.5">
-              <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '8px',  animationDelay: '0ms'   }} />
-              <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '12px', animationDelay: '150ms' }} />
-              <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '8px',  animationDelay: '300ms' }} />
-            </div>
-          ) : currentSong?.isUploaded ? (
-            <Music className="w-4 h-4 text-white/55" />
-          ) : null}
-        </div>
+        <div
+          className="flex items-center gap-3 flex-1 min-w-0"
+          style={{
+            transform: `translateX(${swipe.dragDx}px)`,
+            transition: swipe.dragDx === 0 ? 'transform 200ms cubic-bezier(0.32,0.72,0,1)' : 'none',
+          }}
+        >
+          <div className={cn(
+            'w-9 h-9 rounded-lg shrink-0 bg-gradient-to-br flex items-center justify-center relative overflow-hidden',
+            currentSong?.gradient ?? 'from-muted to-muted/40',
+          )}>
+            {isPlaying ? (
+              <div className="flex items-end gap-0.5">
+                <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '8px',  animationDelay: '0ms'   }} />
+                <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '12px', animationDelay: '150ms' }} />
+                <div className="w-0.5 bg-white/85 animate-pulse" style={{ height: '8px',  animationDelay: '300ms' }} />
+              </div>
+            ) : currentSong?.isUploaded ? (
+              <Music className="w-4 h-4 text-white/55" />
+            ) : null}
+          </div>
 
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-medium truncate text-foreground">{currentSong?.title ?? '—'}</p>
-          <p className="text-[11px] font-sans text-muted-foreground truncate">{currentSong?.artist ?? ''}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-medium truncate text-foreground">{currentSong?.title ?? '—'}</p>
+            <p className="text-[11px] font-sans text-muted-foreground truncate">
+              {sleepLabel ?? (currentSong?.artist ?? '')}
+            </p>
+          </div>
         </div>
 
         {/* Quick play/pause (works without expanding). */}
@@ -201,7 +255,9 @@ function MusicDock({
           tabIndex={0}
           onClick={e => { stopProp(e); handlePlayPause(); }}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { stopProp(e); handlePlayPause(); } }}
-          className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all duration-150 hover:scale-105 active:scale-90 shrink-0"
+          onPointerDown={stopProp}
+          className="w-8 h-8 rounded-full text-primary-foreground flex items-center justify-center shadow-sm transition-all duration-150 hover:scale-105 active:scale-90 shrink-0"
+          style={{ background: 'hsl(var(--song-accent))' }}
         >
           {isPlaying
             ? <Pause className="w-3.5 h-3.5 fill-current" />
@@ -257,7 +313,8 @@ function MusicDock({
               <button
                 onClick={handlePlayPause}
                 title={isPlaying ? 'Pause' : 'Play'}
-                className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all duration-150 hover:scale-105 active:scale-90"
+                className="w-10 h-10 rounded-full text-primary-foreground flex items-center justify-center shadow-sm transition-all duration-150 hover:scale-105 active:scale-90"
+                style={{ background: 'hsl(var(--song-accent))' }}
               >
                 {isPlaying
                   ? <Pause className="w-4 h-4 fill-current" />
@@ -297,6 +354,13 @@ function MusicDock({
                 className={cn(BTN_ICON, 'w-7 h-7 text-muted-foreground/70 hover:text-foreground hover:bg-muted/50 shrink-0')}
               >
                 <ListMusic className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={uiActions.openFullscreenPlayer}
+                title="Open full-screen player"
+                className={cn(BTN_ICON, 'w-7 h-7 text-muted-foreground/70 hover:text-foreground hover:bg-muted/50 shrink-0')}
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={handleUploadClick}

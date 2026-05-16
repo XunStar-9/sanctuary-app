@@ -204,6 +204,55 @@ const FormattingToggle = memo(function FormattingToggle() {
   );
 });
 
+/**
+ * Interface scaling — radius & global font scale.
+ *
+ * Both are rendered as a single section since they're meta-controls that
+ * affect every surface in the app. Each row carries its own reset.
+ */
+const RadiusScaleRow = memo(function RadiusScaleRow() {
+  const radiusScale = useStore(settingsStore, s => s.radiusScale);
+  return (
+    <SliderRow
+      label="圆角"
+      effectiveValue={radiusScale}
+      isCustom={radiusScale !== 1}
+      min={0.5} max={1.5} step={0.05}
+      display={`${Math.round(radiusScale * 100)}%`}
+      onChange={settingsActions.setRadiusScale}
+      onReset={() => settingsActions.setRadiusScale(1)}
+    />
+  );
+});
+
+const GlobalFontScaleRow = memo(function GlobalFontScaleRow() {
+  const scale = useStore(settingsStore, s => s.globalFontScale);
+  return (
+    <SliderRow
+      label="界面缩放"
+      effectiveValue={scale}
+      isCustom={scale !== 1}
+      min={0.85} max={1.25} step={0.05}
+      display={`${Math.round(scale * 100)}%`}
+      onChange={settingsActions.setGlobalFontScale}
+      onReset={() => settingsActions.setGlobalFontScale(1)}
+    />
+  );
+});
+
+const InterfaceSection = memo(function InterfaceSection() {
+  return (
+    <div className="border-t border-border/30 pt-5 mt-5">
+      <p className="text-[11px] font-sans font-medium tracking-[0.12em] uppercase text-muted-foreground mb-4">界面</p>
+      <RadiusScaleRow />
+      <GlobalFontScaleRow />
+      <p className="text-[11px] font-sans leading-relaxed text-muted-foreground/50">
+        圆角调整全局倒角；界面缩放整体放大或缩小所有元素。
+      </p>
+    </div>
+  );
+});
+
 /* ── Panel shell ────────────────────────────────────────────────────────── */
 
 export const TypographyPanel = memo(function TypographyPanel() {
@@ -250,6 +299,7 @@ export const TypographyPanel = memo(function TypographyPanel() {
           <FontFamilyRow />
           <Preview />
           <FormattingToggle />
+          <InterfaceSection />
         </div>
       </div>
     </>

@@ -16,6 +16,7 @@ export type UiState = {
   typographyOpen: boolean;
   libraryOpen: boolean;
   musicExpanded: boolean;
+  fullscreenPlayerOpen: boolean;
 };
 
 const MUSIC_KEY = 'sanctuary_music_expanded';
@@ -34,6 +35,7 @@ export const uiStore = createStore<UiState>({
   typographyOpen: false,
   libraryOpen: false,
   musicExpanded: loadMusicExpanded(),
+  fullscreenPlayerOpen: false,
 });
 
 // Persist musicExpanded eagerly (cheap single bool).
@@ -62,4 +64,7 @@ export const uiActions = {
   closeLibrary:   () => uiStore.set({ libraryOpen: false }),
 
   toggleMusic:    () => uiStore.update(s => ({ ...s, musicExpanded: !s.musicExpanded })),
+
+  openFullscreenPlayer:  () => uiStore.set({ fullscreenPlayerOpen: true }),
+  closeFullscreenPlayer: () => uiStore.set({ fullscreenPlayerOpen: false }),
 };
