@@ -33,7 +33,7 @@ function normalizeForCompare(s: string): string {
 
 /* ── Paragraph rendering ─────────────────────────────────────────────────── */
 
-function ContentParagraphs({ content, chapterTitle, fontSize, lineHeight, editorFont }: {
+const ContentParagraphs = memo(function ContentParagraphs({ content, chapterTitle, fontSize, lineHeight, editorFont }: {
   content: string;
   chapterTitle: string;
   fontSize: FontSize;
@@ -85,7 +85,7 @@ function ContentParagraphs({ content, chapterTitle, fontSize, lineHeight, editor
       })}
     </div>
   );
-}
+});
 
 /* ── Toolbar / Progress bar ─────────────────────────────────────────────── */
 
@@ -305,16 +305,24 @@ function SidePanel({
   );
 }
 
+/* ── Stable selectors ───────────────────────────────────────────────────── */
+
+const selectFontSize       = (s: any) => s.fontSize;
+const selectLineHeight     = (s: any) => s.lineHeight;
+const selectEditorFont     = (s: any) => s.editorFont;
+const selectActiveBookmarks = (s: any) => booksSelectors.activeBookmarks(s);
+const selectActiveProgress  = (s: any) => booksSelectors.activeBookProgress(s);
+
 /* ── BookReader entry ───────────────────────────────────────────────────── */
 
 type Props = { book: Book };
 
 export const BookReader = memo(function BookReader({ book }: Props) {
-  const fontSize         = useStore(settingsStore, s => s.fontSize);
-  const lineHeight       = useStore(settingsStore, s => s.lineHeight);
-  const editorFont       = useStore(settingsStore, s => s.editorFont);
-  const bookmarks        = useStore(booksStore,    s => booksSelectors.activeBookmarks(s));
-  const progress         = useStore(booksStore,    s => booksSelectors.activeBookProgress(s));
+  const fontSize         = useStore(settingsStore, selectFontSize);
+  const lineHeight       = useStore(settingsStore, selectLineHeight);
+  const editorFont       = useStore(settingsStore, selectEditorFont);
+  const bookmarks        = useStore(booksStore,    selectActiveBookmarks);
+  const progress         = useStore(booksStore,    selectActiveProgress);
 
   const [chapterIdx, setChapterIdx] = useState<number>(() => {
     if (!progress) return 0;
@@ -422,10 +430,18 @@ export const BookReader = memo(function BookReader({ book }: Props) {
     });
   }, [totalChapters]);
 
-  const handleAddBookmark = useCallback(() => {
+  const handleToggleBookmark = useCallback(() => {
     if (!chapter) return;
     const pct = scrollPctRef.current;
-    booksActions.addBookmark(book.id, chapter.id, pct, `${chapter.title} · ${Math.round(pct)}%`);
+    // If already bookmarked near this position, remove it; otherwise add.
+    const existing = booksStore.getState().bookmarks.find(
+      b => b.bookId === book.id && b.chapterId === chapter.id && Math.abs(b.position - pct) < 3,
+    );
+    if (existing) {
+      booksActions.removeBookmark(existing.id);
+    } else {
+      booksActions.addBookmark(book.id, chapter.id, pct, `${chapter.title} · ${Math.round(pct)}%`);
+    }
   }, [book.id, chapter]);
 
   const handleJumpBookmark = useCallback((bm: BookMark) => {
@@ -455,7 +471,7 @@ export const BookReader = memo(function BookReader({ book }: Props) {
         panelOpen={panelOpen}
         visible={toolbarVisible}
         onBack={() => booksActions.clearActive()}
-        onToggleBookmark={handleAddBookmark}
+        onToggleBookmark={handleToggleBookmark}
         onTogglePanel={() => { setPanelOpen(p => !p); showToolbar(); }}
       />
 

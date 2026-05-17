@@ -13,6 +13,16 @@ import { useStore } from '@/lib/store';
 import { settingsStore, settingsActions } from '@/stores/settingsStore';
 import { uiStore, uiActions } from '@/stores/uiStore';
 
+/* ── Stable selectors ───────────────────────────────────────────────────── */
+
+const selectFontSizeNum      = (s: any) => s.fontSizeNum;
+const selectFontSizePreset   = (s: any) => s.fontSize;
+const selectLineHeightNum    = (s: any) => s.lineHeightNum;
+const selectLineHeightPreset = (s: any) => s.lineHeight;
+const selectEditorFont       = (s: any) => s.editorFont;
+const selectFormattingOn     = (s: any) => s.formattingEnabled;
+const selectTypoOpen         = (s: any) => s.typographyOpen;
+
 const FONT_SIZE_PRESETS:   Record<FontSize, number>   = { sm: 15, md: 18, lg: 21 };
 const LINE_HEIGHT_PRESETS: Record<LineHeight, number> = { tight: 1.8, normal: 2.2, relaxed: 2.8 };
 
@@ -97,8 +107,8 @@ function Toggle({ enabled, onToggle, label }: { enabled: boolean; onToggle: () =
 /* ── Specialized rows ───────────────────────────────────────────────────── */
 
 const FontSizeRow = memo(function FontSizeRow() {
-  const fontSizeNum   = useStore(settingsStore, s => s.fontSizeNum);
-  const fontSizePreset = useStore(settingsStore, s => s.fontSize);
+  const fontSizeNum   = useStore(settingsStore, selectFontSizeNum);
+  const fontSizePreset = useStore(settingsStore, selectFontSizePreset);
   const effective = fontSizeNum > 0 ? fontSizeNum : (FONT_SIZE_PRESETS[fontSizePreset] ?? 18);
   return (
     <SliderRow
@@ -114,8 +124,8 @@ const FontSizeRow = memo(function FontSizeRow() {
 });
 
 const LineHeightRow = memo(function LineHeightRow() {
-  const lineHeightNum    = useStore(settingsStore, s => s.lineHeightNum);
-  const lineHeightPreset = useStore(settingsStore, s => s.lineHeight);
+  const lineHeightNum    = useStore(settingsStore, selectLineHeightNum);
+  const lineHeightPreset = useStore(settingsStore, selectLineHeightPreset);
   const effective = lineHeightNum > 0 ? lineHeightNum : (LINE_HEIGHT_PRESETS[lineHeightPreset] ?? 2.2);
   return (
     <SliderRow
@@ -131,7 +141,7 @@ const LineHeightRow = memo(function LineHeightRow() {
 });
 
 const FontFamilyRow = memo(function FontFamilyRow() {
-  const editorFont = useStore(settingsStore, s => s.editorFont);
+  const editorFont = useStore(settingsStore, selectEditorFont);
   return (
     <div className="mb-6">
       <p className="text-[11px] font-sans font-medium tracking-[0.12em] uppercase text-muted-foreground mb-2.5">字体</p>
@@ -161,11 +171,11 @@ const FontFamilyRow = memo(function FontFamilyRow() {
 });
 
 const Preview = memo(function Preview() {
-  const editorFont       = useStore(settingsStore, s => s.editorFont);
-  const fontSizeNum      = useStore(settingsStore, s => s.fontSizeNum);
-  const fontSizePreset   = useStore(settingsStore, s => s.fontSize);
-  const lineHeightNum    = useStore(settingsStore, s => s.lineHeightNum);
-  const lineHeightPreset = useStore(settingsStore, s => s.lineHeight);
+  const editorFont       = useStore(settingsStore, selectEditorFont);
+  const fontSizeNum      = useStore(settingsStore, selectFontSizeNum);
+  const fontSizePreset   = useStore(settingsStore, selectFontSizePreset);
+  const lineHeightNum    = useStore(settingsStore, selectLineHeightNum);
+  const lineHeightPreset = useStore(settingsStore, selectLineHeightPreset);
   const effFs = fontSizeNum   > 0 ? fontSizeNum   : (FONT_SIZE_PRESETS[fontSizePreset]   ?? 18);
   const effLh = lineHeightNum > 0 ? lineHeightNum : (LINE_HEIGHT_PRESETS[lineHeightPreset] ?? 2.2);
   const style = useMemo(() => ({ fontSize: `${Math.round(effFs)}px`, lineHeight: effLh }), [effFs, effLh]);
@@ -183,7 +193,7 @@ const Preview = memo(function Preview() {
 });
 
 const FormattingToggle = memo(function FormattingToggle() {
-  const enabled = useStore(settingsStore, s => s.formattingEnabled);
+  const enabled = useStore(settingsStore, selectFormattingOn);
   return (
     <div className="border-t border-border/30 pt-5">
       <p className="text-[11px] font-sans font-medium tracking-[0.12em] uppercase text-muted-foreground mb-4">文字标注</p>
@@ -207,7 +217,7 @@ const FormattingToggle = memo(function FormattingToggle() {
 /* ── Panel shell ────────────────────────────────────────────────────────── */
 
 export const TypographyPanel = memo(function TypographyPanel() {
-  const open = useStore(uiStore, s => s.typographyOpen);
+  const open = useStore(uiStore, selectTypoOpen);
 
   useEffect(() => {
     if (!open) return;
