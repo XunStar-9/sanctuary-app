@@ -6,7 +6,7 @@
  * `@/lib/markdown` so this file is just UI + selection bookkeeping.
  */
 
-import { memo, useRef, useState, useCallback, useMemo, useSyncExternalStore } from 'react';
+import { memo, useRef, useState, useCallback, useMemo, useEffect, useSyncExternalStore } from 'react';
 import { PenLine, Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FONT_SIZE_MAP, LINE_HEIGHT_MAP } from '@/lib/types';
@@ -22,6 +22,16 @@ type SelectionState = {
   x: number; y: number;
   start: number; end: number;
 };
+
+/* ── Stable selectors ───────────────────────────────────────────────────── */
+
+const selectActiveNote      = (s: any) => notesSelectors.activeNote(s);
+const selectFontSize        = (s: any) => s.fontSize;
+const selectLineHeight      = (s: any) => s.lineHeight;
+const selectEditorFont      = (s: any) => s.editorFont;
+const selectFontSizeNum     = (s: any) => s.fontSizeNum;
+const selectLineHeightNum   = (s: any) => s.lineHeightNum;
+const selectFormattingOn    = (s: any) => s.formattingEnabled;
 
 /**
  * Subscribe to the audio engine but only re-render this component when the
@@ -45,17 +55,28 @@ function useAudioBadge() {
 }
 
 export const NoteEditor = memo(function NoteEditor() {
-  const activeNote = useStore(notesStore, s => notesSelectors.activeNote(s));
-  const fontSize           = useStore(settingsStore, s => s.fontSize);
-  const lineHeight         = useStore(settingsStore, s => s.lineHeight);
-  const editorFont         = useStore(settingsStore, s => s.editorFont);
-  const fontSizeNum        = useStore(settingsStore, s => s.fontSizeNum);
-  const lineHeightNum      = useStore(settingsStore, s => s.lineHeightNum);
-  const formattingEnabled  = useStore(settingsStore, s => s.formattingEnabled);
+  const activeNote = useStore(notesStore, selectActiveNote);
+  const fontSize           = useStore(settingsStore, selectFontSize);
+  const lineHeight         = useStore(settingsStore, selectLineHeight);
+  const editorFont         = useStore(settingsStore, selectEditorFont);
+  const fontSizeNum        = useStore(settingsStore, selectFontSizeNum);
+  const lineHeightNum      = useStore(settingsStore, selectLineHeightNum);
+  const formattingEnabled  = useStore(settingsStore, selectFormattingOn);
   const audio = useAudioBadge();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selection, setSelection] = useState<SelectionState | null>(null);
+
+  // Auto-resize textarea to fit content (avoids nested scrolling).
+  const autoResize = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${ta.scrollHeight}px`;
+  }, []);
+
+  // Resize on content change or when active note switches.
+  useEffect(() => { autoResize(); }, [activeNote?.id, activeNote?.content, autoResize]);
 
   const handleSelectionEvent = useCallback((e: React.MouseEvent<HTMLTextAreaElement> | React.TouchEvent<HTMLTextAreaElement>) => {
     if (!formattingEnabled) return;
@@ -105,7 +126,7 @@ export const NoteEditor = memo(function NoteEditor() {
   if (lineHeightNum > 0) typoStyle.lineHeight = lineHeightNum;
 
   const typoClass = cn(
-    'w-full min-h-[60vh] resize-none bg-transparent border-none outline-none focus:ring-0',
+    'w-full min-h-[200px] resize-none bg-transparent border-none outline-none focus:ring-0 overflow-hidden',
     'text-foreground/80 placeholder-muted-foreground/30',
     fontSizeNum   === 0 ? FONT_SIZE_MAP[fontSize]    : '',
     lineHeightNum === 0 ? LINE_HEIGHT_MAP[lineHeight] : '',
@@ -115,6 +136,30 @@ export const NoteEditor = memo(function NoteEditor() {
   const handleContentChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     notesActions.updateActiveNote({ content: e.target.value });
   }, []);
+
+  // Keyboard shortcuts for formatting (Cmd+B, Cmd+I, Cmd+H)
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!formattingEnabled) return;
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod) return;
+    let key: FormatKey | null = null;
+    if (e.key === 'b') key = 'bold';
+    else if (e.key === 'i') key = 'italic';
+    else if (e.key === 'h') key = 'highlight';
+    if (!key) return;
+    e.preventDefault();
+    const ta = textareaRef.current;
+    if (!ta || !activeNote) return;
+    const { selectionStart: start, selectionEnd: end } = ta;
+    if (start === end) return;
+    const marker = MARKERS[key];
+    const { newContent, newStart, newEnd } = toggleMarker(activeNote.content, start, end, marker);
+    notesActions.updateActiveNote({ content: newContent });
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(newStart, newEnd);
+    });
+  }, [formattingEnabled, activeNote]);
 
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     notesActions.updateActiveNote({ title: e.target.value });
@@ -126,6 +171,7 @@ export const NoteEditor = memo(function NoteEditor() {
         <button
           onClick={uiActions.toggleSidebar}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-150 active:scale-90 shrink-0"
+          aria-label="Toggle sidebar"
         >
           <Menu className="w-4 h-4" />
         </button>
@@ -158,12 +204,14 @@ export const NoteEditor = memo(function NoteEditor() {
               ref={textareaRef}
               value={activeNote.content}
               onChange={handleContentChange}
+              onKeyDown={handleKeyDown}
               onMouseUp={handleSelectionEvent}
               onTouchEnd={handleSelectionEvent}
               onKeyUp={() => setSelection(null)}
               className={typoClass}
               style={typoStyle}
               placeholder="Start writing..."
+              aria-label="Note content"
             />
           </div>
         ) : (

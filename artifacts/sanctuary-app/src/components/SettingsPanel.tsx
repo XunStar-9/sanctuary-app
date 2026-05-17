@@ -15,6 +15,14 @@ import { useStore } from '@/lib/store';
 import { settingsStore, settingsActions } from '@/stores/settingsStore';
 import { uiStore, uiActions } from '@/stores/uiStore';
 
+/* ── Stable selectors ───────────────────────────────────────────────────── */
+
+const selectTheme      = (s: any) => s.theme;
+const selectFontSize   = (s: any) => s.fontSize;
+const selectLineHeight = (s: any) => s.lineHeight;
+const selectEditorFont = (s: any) => s.editorFont;
+const selectSettingsOpen = (s: any) => s.settingsOpen;
+
 function Section({ title, children, action }: {
   title: string;
   children: React.ReactNode;
@@ -50,7 +58,7 @@ function OptionBtn({ label, active, onClick }: {
 }
 
 const ThemeSection = memo(function ThemeSection() {
-  const theme = useStore(settingsStore, s => s.theme);
+  const theme = useStore(settingsStore, selectTheme);
   return (
     <Section title="主题配色">
       <div className="flex flex-col gap-1.5">
@@ -84,7 +92,7 @@ const ThemeSection = memo(function ThemeSection() {
 });
 
 const FontSizeSection = memo(function FontSizeSection() {
-  const fontSize = useStore(settingsStore, s => s.fontSize);
+  const fontSize = useStore(settingsStore, selectFontSize);
   const fineTuneLink = (
     <button
       onClick={uiActions.openTypography}
@@ -105,7 +113,7 @@ const FontSizeSection = memo(function FontSizeSection() {
 });
 
 const LineHeightSection = memo(function LineHeightSection() {
-  const lineHeight = useStore(settingsStore, s => s.lineHeight);
+  const lineHeight = useStore(settingsStore, selectLineHeight);
   const fineTuneLink = (
     <button
       onClick={uiActions.openTypography}
@@ -126,7 +134,7 @@ const LineHeightSection = memo(function LineHeightSection() {
 });
 
 const FontFamilySection = memo(function FontFamilySection() {
-  const editorFont = useStore(settingsStore, s => s.editorFont);
+  const editorFont = useStore(settingsStore, selectEditorFont);
   return (
     <Section title="编辑器字体">
       <div className="flex gap-2">
@@ -155,7 +163,7 @@ const FontFamilySection = memo(function FontFamilySection() {
 });
 
 export const SettingsPanel = memo(function SettingsPanel() {
-  const open = useStore(uiStore, s => s.settingsOpen);
+  const open = useStore(uiStore, selectSettingsOpen);
 
   useEffect(() => {
     if (!open) return;

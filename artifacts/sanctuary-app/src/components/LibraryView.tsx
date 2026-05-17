@@ -67,8 +67,8 @@ const BookCard = memo(function BookCard({ book, bookmarkCount }: {
 /* ── Shelf ──────────────────────────────────────────────────────────────── */
 
 const Shelf = memo(function Shelf() {
-  const books     = useStore(booksStore, s => s.books);
-  const bookmarks = useStore(booksStore, s => s.bookmarks);
+  const books     = useStore(booksStore, selectBooks);
+  const bookmarks = useStore(booksStore, selectBookmarks);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const onPickFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,7 +103,7 @@ const Shelf = memo(function Shelf() {
 });
 
 const ShelfHeader = memo(function ShelfHeader({ onImport }: { onImport: () => void }) {
-  const importing = useStore(booksStore, s => s.importing);
+  const importing = useStore(booksStore, selectImporting);
   return (
     <div className="flex items-center gap-3 px-5 h-14 border-b border-border/30 bg-background/80 backdrop-blur-xl shrink-0">
       <button
@@ -128,7 +128,7 @@ const ShelfHeader = memo(function ShelfHeader({ onImport }: { onImport: () => vo
 });
 
 const ImportError = memo(function ImportError() {
-  const err = useStore(booksStore, s => s.importError);
+  const err = useStore(booksStore, selectImportErr);
   if (!err) return null;
   return (
     <div className="mx-5 mt-4 px-4 py-3 rounded-xl bg-destructive/10 text-destructive text-sm font-sans">
@@ -158,10 +158,18 @@ function EmptyShelf({ onImport }: { onImport: () => void }) {
   );
 }
 
+/* ── Selectors ──────────────────────────────────────────────────────────── */
+
+const selectActiveBook = (s: BooksState) => booksSelectors.activeBook(s);
+const selectBooks      = (s: BooksState) => s.books;
+const selectBookmarks  = (s: BooksState) => s.bookmarks;
+const selectImporting  = (s: BooksState) => s.importing;
+const selectImportErr  = (s: BooksState) => s.importError;
+
 /* ── LibraryView entry ──────────────────────────────────────────────────── */
 
 export const LibraryView = memo(function LibraryView() {
-  const activeBook = useStore(booksStore, s => booksSelectors.activeBook(s));
+  const activeBook = useStore(booksStore, selectActiveBook);
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">

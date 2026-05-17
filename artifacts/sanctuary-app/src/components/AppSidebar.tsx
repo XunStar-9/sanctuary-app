@@ -23,12 +23,19 @@ import { useAudio } from '@/hooks/useAudio';
 const BTN_BASE = 'transition-all duration-150 active:scale-90';
 const BTN_ICON = 'flex items-center justify-center rounded-lg transition-all duration-150 active:scale-90';
 
+/* ── Stable selectors ───────────────────────────────────────────────────── */
+
+const selectFilteredNotes = (s: any) => notesSelectors.filtered(s);
+const selectActiveNoteId  = (s: any) => s.activeNoteId;
+const selectSearchQuery   = (s: any) => s.searchQuery;
+const selectSidebarOpen   = (s: any) => s.sidebarOpen;
+
 /* ── Notes section ───────────────────────────────────────────────────────── */
 
 const NotesSection = memo(function NotesSection() {
-  const filteredNotes = useStore(notesStore, s => notesSelectors.filtered(s));
-  const activeNoteId = useStore(notesStore, s => s.activeNoteId);
-  const searchQuery = useStore(notesStore, s => s.searchQuery);
+  const filteredNotes = useStore(notesStore, selectFilteredNotes);
+  const activeNoteId = useStore(notesStore, selectActiveNoteId);
+  const searchQuery = useStore(notesStore, selectSearchQuery);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const handleSelect = useCallback((id: string) => {
@@ -55,6 +62,7 @@ const NotesSection = memo(function NotesSection() {
         <button
           onClick={notesActions.addNote}
           className={cn(BTN_ICON, 'w-6 h-6 text-muted-foreground hover:text-foreground hover:bg-muted/50')}
+          aria-label="New note"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
@@ -67,6 +75,7 @@ const NotesSection = memo(function NotesSection() {
           placeholder="Search..."
           value={searchQuery}
           onChange={e => notesActions.setSearchQuery(e.target.value)}
+          aria-label="Search notes"
         />
         {searchQuery && (
           <button
@@ -79,15 +88,16 @@ const NotesSection = memo(function NotesSection() {
       </div>
 
       <div className="flex flex-col gap-0.5 mb-4 -mx-2">
-        {filteredNotes.map(note => (
+        {filteredNotes.map((note, idx) => (
           <div
             key={note.id}
             className={cn(
-              'w-full text-left px-3 py-2.5 rounded-xl transition-all duration-150 group flex items-start gap-1',
+              'w-full text-left px-3 py-2.5 rounded-xl transition-all duration-150 group flex items-start gap-1 animate-slide-in-note',
               activeNoteId === note.id
                 ? 'bg-primary/10 text-foreground'
                 : 'text-foreground/70 hover:bg-muted/50 hover:text-foreground active:bg-muted/70',
             )}
+            style={{ animationDelay: `${idx * 30}ms` }}
           >
             <button onClick={() => handleSelect(note.id)} className="flex-1 min-w-0 text-left">
               <p className="text-[13px] font-medium line-clamp-1 mb-0.5">{note.title}</p>
@@ -101,6 +111,7 @@ const NotesSection = memo(function NotesSection() {
                   ? 'text-destructive bg-destructive/10'
                   : 'text-muted-foreground/20 md:text-transparent md:group-hover:text-muted-foreground/40 hover:text-destructive hover:bg-muted/50',
               )}
+              aria-label={confirmDelete === note.id ? 'Confirm delete' : 'Delete note'}
             >
               <Trash2 className="w-3 h-3" />
             </button>
@@ -115,6 +126,25 @@ const NotesSection = memo(function NotesSection() {
 });
 
 /* ── Music mini-player ──────────────────────────────────────────────────── */
+
+const MusicSection = memo(function MusicSection({ onOpenPlaylist }: { onOpenPlaylist: () => void }) {
+  const audio = useAudio();
+
+  return (
+    <>
+      <MusicMini {...audio} onOpenPlaylist={onOpenPlaylist} />
+      {/* Hidden file input lives here so the audio ref is in scope */}
+      <input
+        ref={audio.fileInputRef}
+        type="file"
+        accept="audio/*"
+        multiple
+        className="hidden"
+        onChange={audio.handleFileChange}
+      />
+    </>
+  );
+});
 
 type MusicMiniProps = ReturnType<typeof useAudio> & { onOpenPlaylist: () => void };
 
@@ -157,6 +187,7 @@ function MusicMini({
               <div className={cn(
                 'w-10 h-10 rounded-lg shrink-0 bg-gradient-to-br flex items-center justify-center relative overflow-hidden',
                 currentSong?.gradient ?? 'from-muted to-muted/40',
+                isPlaying && 'animate-vinyl-spin rounded-full',
               )}>
                 {currentSong?.isUploaded && <Music className="w-4 h-4 text-white/50" />}
               </div>
@@ -184,26 +215,34 @@ function MusicMini({
               <button
                 onClick={toggleShuffle}
                 className={cn(BTN_BASE, isShuffle ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
+                aria-label="Toggle shuffle"
+                aria-pressed={isShuffle}
               >
                 <Shuffle className="w-3.5 h-3.5" />
               </button>
-              <button onClick={handlePrev} className={cn(BTN_BASE, 'text-foreground/70 hover:text-foreground')}>
+              <button onClick={handlePrev} className={cn(BTN_BASE, 'text-foreground/70 hover:text-foreground')} aria-label="Previous track">
                 <SkipBack className="w-4 h-4 fill-current" />
               </button>
               <button
                 onClick={handlePlayPause}
-                className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all duration-150 hover:scale-105 active:scale-90"
+                className={cn(
+                  "w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm hover:bg-primary/90 transition-all duration-150 hover:scale-105 active:scale-90",
+                  isPlaying && 'animate-music-pulse',
+                )}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
               >
                 {isPlaying
                   ? <Pause className="w-4 h-4 fill-current" />
                   : <Play  className="w-4 h-4 fill-current ml-0.5" />}
               </button>
-              <button onClick={handleNext} className={cn(BTN_BASE, 'text-foreground/70 hover:text-foreground')}>
+              <button onClick={handleNext} className={cn(BTN_BASE, 'text-foreground/70 hover:text-foreground')} aria-label="Next track">
                 <SkipForward className="w-4 h-4 fill-current" />
               </button>
               <button
                 onClick={toggleRepeat}
                 className={cn(BTN_BASE, isRepeat ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
+                aria-label="Toggle repeat"
+                aria-pressed={isRepeat}
               >
                 <Repeat className="w-3.5 h-3.5" />
               </button>
@@ -213,6 +252,7 @@ function MusicMini({
               <button
                 onClick={toggleMute}
                 className={cn(BTN_BASE, 'text-muted-foreground/60 hover:text-foreground shrink-0')}
+                aria-label={volume === 0 ? 'Unmute' : 'Mute'}
               >
                 {volume === 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
               </button>
@@ -230,10 +270,10 @@ function MusicMini({
 type PlaylistPanelProps = {
   open: boolean;
   onClose: () => void;
-  audio: ReturnType<typeof useAudio>;
 };
 
-function PlaylistPanel({ open, onClose, audio }: PlaylistPanelProps) {
+function PlaylistPanel({ open, onClose }: PlaylistPanelProps) {
+  const audio = useAudio();
   const { playlist, currentSongIndex, isPlaying, handleSelectSong, handleRemoveSong, handleUploadClick } = audio;
   return (
     <>
@@ -338,8 +378,7 @@ function PlaylistPanel({ open, onClose, audio }: PlaylistPanelProps) {
 /* ── Sidebar shell ──────────────────────────────────────────────────────── */
 
 export const AppSidebar = memo(function AppSidebar() {
-  const open = useStore(uiStore, s => s.sidebarOpen);
-  const audio = useAudio();
+  const open = useStore(uiStore, selectSidebarOpen);
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const closePlaylist = useCallback(() => setPlaylistOpen(false), []);
   const openPlaylist = useCallback(() => setPlaylistOpen(true), []);
@@ -353,20 +392,12 @@ export const AppSidebar = memo(function AppSidebar() {
         open ? 'translate-x-0' : '-translate-x-full md:-translate-x-full',
       )}
     >
-      <input
-        ref={audio.fileInputRef}
-        type="file"
-        accept="audio/*"
-        multiple
-        className="hidden"
-        onChange={audio.handleFileChange}
-      />
-
       <div className="flex items-center justify-between px-5 pt-6 pb-4 shrink-0">
         <span className="text-xs font-sans tracking-[0.2em] uppercase text-muted-foreground/50 select-none">Sanctuary</span>
         <button
           onClick={uiActions.closeSidebar}
           className={cn(BTN_ICON, 'w-7 h-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/50')}
+          aria-label="Close sidebar"
         >
           <X className="w-4 h-4" />
         </button>
@@ -375,7 +406,7 @@ export const AppSidebar = memo(function AppSidebar() {
       <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain">
         <NotesSection />
         <div className="mx-5 border-t border-border/30 mb-4" />
-        <MusicMini {...audio} onOpenPlaylist={openPlaylist} />
+        <MusicSection onOpenPlaylist={openPlaylist} />
       </div>
 
       <div className="px-5 py-4 border-t border-border/20 shrink-0 flex items-center justify-between">
@@ -395,7 +426,7 @@ export const AppSidebar = memo(function AppSidebar() {
         </button>
       </div>
 
-      <PlaylistPanel open={playlistOpen} onClose={closePlaylist} audio={audio} />
+      <PlaylistPanel open={playlistOpen} onClose={closePlaylist} />
     </aside>
   );
 });
